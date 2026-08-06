@@ -29,6 +29,12 @@ export default function Navbar() {
               >
                 My Stats
               </Link>
+              <Link
+                to="/connect"
+                className="text-sm text-mist hover:text-white transition-colors px-3 py-2"
+              >
+                Manage Connection
+              </Link>
               <button
                 onClick={async () => { await logout(); navigate('/'); }}
                 className="text-sm px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-colors"

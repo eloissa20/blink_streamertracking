@@ -39,13 +39,17 @@ class StatsFmController extends Controller
         $user = $request->user();
 
         if ($user->hasConnectedStatsFm()) {
+            $current = $user->statsFmConnection;
+            $currentLabel = $current?->connected_source === 'apple_music' ? 'Apple Music' : 'Spotify';
+
             return response()->json([
-                'message' => 'You already have a connected Stats.fm account. Disconnect it first to link a different one.',
+                'message' => "You're already connected to {$currentLabel} via Stats.fm. Disconnect it first to switch services.",
             ], 409);
         }
 
         $validator = Validator::make($request->all(), [
             'statsfm_handle' => ['required', 'string', 'max:100'],
+            'source' => ['required', 'string', 'in:spotify,apple_music'],
         ]);
 
         if ($validator->fails()) {
@@ -73,6 +77,7 @@ class StatsFmController extends Controller
             'statsfm_username' => $profile['customId'] ?? $request->statsfm_handle,
             'display_name' => $profile['displayName'] ?? null,
             'avatar_url' => $profile['image'] ?? null,
+            'connected_source' => $request->source,
             'connected_at' => now(),
         ]);
 

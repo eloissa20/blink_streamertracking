@@ -67,4 +67,25 @@ class PlayRecord extends Model
 
         return $query->whereRaw("LOWER(artist_name) IN ($placeholders)", $names);
     }
+
+    /**
+     * A connection tracks exactly one service (Spotify or Apple Music).
+     * This is a read-time safety net alongside the same check already
+     * applied when a play is synced in — so even a play left over from
+     * before a user switched services (or from before this feature
+     * existed) is excluded from every count and list. Connections with no
+     * chosen source yet (legacy rows) are left unrestricted.
+     */
+    public function scopeMatchingConnectedSource(Builder $query): Builder
+    {
+        return $query->whereExists(function ($sub) {
+            $sub->selectRaw('1')
+                ->from('statsfm_connections')
+                ->whereColumn('statsfm_connections.id', 'play_records.statsfm_connection_id')
+                ->where(function ($q) {
+                    $q->whereColumn('statsfm_connections.connected_source', 'play_records.source')
+                        ->orWhereNull('statsfm_connections.connected_source');
+                });
+        });
+    }
 }

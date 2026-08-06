@@ -19,7 +19,7 @@ class PublicDashboardController extends Controller
         $optedInUserIds = StatsFmConnection::where('include_in_public_overview', true)
             ->pluck('user_id');
 
-        return PlayRecord::query()->whereIn('user_id', $optedInUserIds)->allowedArtists();
+        return PlayRecord::query()->whereIn('user_id', $optedInUserIds)->allowedArtists()->matchingConnectedSource();
     }
 
     public function overview()

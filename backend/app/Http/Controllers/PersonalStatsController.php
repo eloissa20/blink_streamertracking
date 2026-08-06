@@ -30,6 +30,7 @@ class PersonalStatsController extends Controller
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
+            ->matchingConnectedSource()
             ->inWindow($window)
             ->selectRaw('track_id, track_name, artist_name, album_name, artwork_url, source,
                 COUNT(*) as play_count, SUM(duration_ms) as total_ms')
@@ -61,6 +62,7 @@ class PersonalStatsController extends Controller
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
+            ->matchingConnectedSource()
             ->inWindow($window)
             ->selectRaw('artist_id, artist_name, MAX(artist_image_url) as artist_image_url,
                 COUNT(*) as play_count, SUM(duration_ms) as total_ms,
@@ -89,6 +91,7 @@ class PersonalStatsController extends Controller
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
+            ->matchingConnectedSource()
             ->orderByDesc('played_at')
             ->limit(100)
             ->get()
@@ -119,6 +122,7 @@ class PersonalStatsController extends Controller
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
+            ->matchingConnectedSource()
             ->where('played_at', '>=', $start)
             ->selectRaw('DATE(played_at) as day, source, COUNT(*) as play_count')
             ->groupBy('day', 'source')

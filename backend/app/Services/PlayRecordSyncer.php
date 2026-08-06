@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PlayRecord;
 use App\Models\StatsFmConnection;
 use App\Support\AllowedArtists;
+use App\Support\StreamRules;
 
 class PlayRecordSyncer
 {
@@ -19,6 +20,10 @@ class PlayRecordSyncer
      *      Stats.fm's API ever returns an inconsistent id for a play we've
      *      already recorded.
      * Only BLACKPINK + members plays are stored; anything else is skipped.
+     * Only plays from the connection's chosen service are stored — a
+     * connection tracks exactly one of Spotify or Apple Music, never both.
+     * And a play only counts as a stream at all if it meets the same
+     * minimum-listen-duration rule regardless of source (StreamRules).
      */
     public function sync(StatsFmConnection $connection): int
     {
@@ -29,6 +34,18 @@ class PlayRecordSyncer
             $normalized = $this->statsFm->normalizeStream($item);
 
             if (! AllowedArtists::isAllowed($normalized['artist_name'])) {
+                continue;
+            }
+
+            // A connection tracks exactly one service. If the user connected
+            // as Spotify, anything Stats.fm reports from Apple Music (or
+            // vice versa) is ignored — and the reverse.
+            if ($connection->connected_source && $normalized['source'] !== $connection->connected_source) {
+                continue;
+            }
+
+            // Same minimum-duration rule for every source — see StreamRules.
+            if (! StreamRules::countsAsStream($normalized['duration_ms'])) {
                 continue;
             }
 
