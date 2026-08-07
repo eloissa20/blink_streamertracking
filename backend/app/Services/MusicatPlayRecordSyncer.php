@@ -22,6 +22,12 @@ class MusicatPlayRecordSyncer
         $items = $this->musicat->recentlyPlayed($connection->musicat_user_id);
         $inserted = 0;
 
+        // Recently-played rows never show a photo, but the profile's "Top
+        // artists" section does — fetch that mapping once per sync run
+        // (rather than once per item) and use it to fill artist_image_url,
+        // which normalizeStream() otherwise always leaves null.
+        $artistImages = $this->musicat->artistImageMap($connection->musicat_user_id);
+
         foreach ($items as $item) {
             $normalized = $this->musicat->normalizeStream($item);
 
@@ -32,6 +38,8 @@ class MusicatPlayRecordSyncer
             if (! StreamRules::countsAsStream($normalized['duration_ms'])) {
                 continue;
             }
+
+            $normalized['artist_image_url'] = $artistImages[$normalized['artist_name']] ?? null;
 
             $alreadyRecorded = PlayRecord::query()
                 ->where('musicat_stream_id', $normalized['musicat_stream_id'])

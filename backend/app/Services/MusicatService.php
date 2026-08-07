@@ -66,9 +66,9 @@ class MusicatService
         try {
             $shot = Browsershot::url("{$this->profileBaseUrl}/{$handle}")
                 ->noSandbox()
-                ->waitUntilNetworkIdle()
+                ->waitUntilDOMContentLoaded()
                 ->setDelay($this->renderDelayMs)
-                ->timeout(30);
+                ->timeout(45);
 
             if ($this->chromePath) {
                 $shot->setChromePath($this->chromePath);
@@ -94,6 +94,94 @@ class MusicatService
     {
         return $crawler->filterXPath('//body//*[not(self::script or self::style)]/text()[normalize-space()]')
             ->each(fn (Crawler $node) => trim($node->text()));
+    }
+
+    /**
+     * Visible text nodes AND <img> tags together, in document order, so we
+     * can tell which photo immediately preceded which line of text. Used
+     * only for pulling artist photos out of the "Top artists" section —
+     * recentlyPlayed()/findUserByHandle() don't need images and stick to
+     * the plain textNodes() above.
+     *
+     * Each entry is ['type' => 'text'|'img', 'value' => string].
+     */
+    private function textAndImageNodes(Crawler $crawler): array
+    {
+        $nodes = $crawler->filterXPath(
+            '//body//*[not(self::script or self::style)]/text()[normalize-space()] | //body//img'
+        )->each(function (Crawler $node) {
+            $domNode = $node->getNode(0);
+
+            if ($domNode->nodeName === '#text') {
+                $value = trim($domNode->textContent);
+                return $value !== '' ? ['type' => 'text', 'value' => $value] : null;
+            }
+
+            $src = $domNode->getAttribute('src');
+            return $src !== '' ? ['type' => 'img', 'value' => $src] : null;
+        });
+
+        return array_values(array_filter($nodes));
+    }
+
+    /**
+     * Map artist name => photo URL, scraped from the profile's "Top
+     * artists" section. This is the only place on the page artist photos
+     * actually appear — the "Recently played" rows never show one, which
+     * is why normalizeStream() otherwise has nothing to put in
+     * artist_image_url. Each card in that section reads, in DOM order:
+     * <img>, "#N" (rank), a play count, then the artist name — so the
+     * image immediately preceding a name (once rank/count are skipped
+     * over) is that artist's photo.
+     */
+    public function artistImageMap(string $handle): array
+    {
+        $html = $this->renderProfileHtml($handle);
+
+        if (! $html) {
+            return [];
+        }
+
+        $crawler = new Crawler($html);
+        $nodes = $this->textAndImageNodes($crawler);
+
+        $inSection = false;
+        $lastImgSrc = null;
+        $map = [];
+
+        foreach ($nodes as $node) {
+            if ($node['type'] === 'text' && $node['value'] === 'Top artists') {
+                $inSection = true;
+                continue;
+            }
+
+            if (! $inSection) {
+                continue;
+            }
+
+            // Any other section heading means we've left "Top artists".
+            if ($node['type'] === 'text' && in_array($node['value'], ['Top albums', 'Top tracks', 'Favorites', 'Achievements', 'Notes', 'Reviews', 'Mentions'], true)) {
+                break;
+            }
+
+            if ($node['type'] === 'img') {
+                $lastImgSrc = $node['value'];
+                continue;
+            }
+
+            // Skip rank ("#1") and play-count ("26") lines — the artist
+            // name is whichever text line isn't purely one of those, and
+            // it's what the most recently seen image belongs to.
+            $isRank = str_starts_with($node['value'], '#');
+            $isCount = ctype_digit($node['value']);
+
+            if (! $isRank && ! $isCount && $lastImgSrc) {
+                $map[$node['value']] = $lastImgSrc;
+                $lastImgSrc = null; // each photo belongs to exactly one card
+            }
+        }
+
+        return $map;
     }
 
     /**
@@ -163,7 +251,13 @@ class MusicatService
         $crawler = new Crawler($html);
         $lines = $this->textNodes($crawler);
 
-        $metaPattern = '/^(Apple Music|Spotify)\s*[•·]\s*(\d{2}\.\d{2}\.\d{2})\s+(\d{1,2}:\d{2}\s*[AP]M)\s*[•·]/i';
+        // Deliberately loose: don't require an exact bullet character or a
+        // trailing separator. The rendered page's "•" and surrounding
+        // spaces may not be the literal U+2022/U+00B7 characters or plain
+        // ASCII spaces (e.g. could be non-breaking spaces or a different
+        // bullet glyph) — matching "some non-digit stuff" between the
+        // source name and the date sidesteps that entirely.
+        $metaPattern = '/^(Apple Music|Spotify)[^\d]{1,8}(\d{2}\.\d{2}\.\d{2})\s+(\d{1,2}:\d{2}\s*[AP]M)/iu';
 
         $items = [];
         foreach ($lines as $i => $line) {
@@ -189,7 +283,13 @@ class MusicatService
 
             $playedAt = null;
             try {
-                $playedAt = Carbon::createFromFormat('m.d.y g:i A', "{$m[2]} {$m[3]}");
+                // Musicat renders timestamps in the local time of whatever
+                // browser/machine is rendering the page (Asia/Manila here),
+                // not UTC — parsing without a source timezone would treat
+                // e.g. "2:49 PM" as already-UTC and store every play ~8
+                // hours off from the real moment it happened.
+                $playedAt = Carbon::createFromFormat('m.d.y g:i A', "{$m[2]} {$m[3]}", 'Asia/Manila')
+                    ->setTimezone(config('app.timezone'));
             } catch (\Throwable) {
                 continue; // unparsable timestamp — skip rather than guess
             }
@@ -210,12 +310,15 @@ class MusicatService
 
     /**
      * Normalize a raw scraped item into the shape PlayRecord expects.
-     * Source is always `apple_music` — see class docblock. Track/artist
-     * ids, album, and artwork aren't available from the profile page's
-     * "Recently played" rows, so those fields are left null; duration is
-     * a fixed placeholder since it's never shown on the page (see class
-     * docblock for why that means total-listening-time stats are
-     * approximate for Musicat-sourced plays).
+     * Source is always `apple_music` — see class docblock. Track id and
+     * album/artwork aren't available from the profile page's "Recently
+     * played" rows, so those stay null; artist_image_url also starts null
+     * here since it's not on this section of the page either — it gets
+     * filled in afterward by MusicatPlayRecordSyncer from the "Top
+     * artists" section's photos instead. Duration is a fixed placeholder
+     * since it's never shown on the page (see class docblock for why that
+     * means total-listening-time stats are approximate for Musicat-sourced
+     * plays).
      */
     public function normalizeStream(array $item): array
     {
