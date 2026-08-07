@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\MusicatController;
 use App\Http\Controllers\PersonalStatsController;
 use App\Http\Controllers\PublicDashboardController;
 use App\Http\Controllers\StatsFmController;
@@ -21,11 +22,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
 
-    // --- Stats.fm account connection (one per user) ---------------------
+    // --- Stats.fm account connection — Spotify only, one per user -------
     Route::get('/statsfm/connection', [StatsFmController::class, 'show']);
     Route::post('/statsfm/connect', [StatsFmController::class, 'connect']);
     Route::delete('/statsfm/connection', [StatsFmController::class, 'disconnect']);
     Route::post('/statsfm/sync', [StatsFmController::class, 'sync']);
+
+    // --- Musicat account connection — exclusive Apple Music source ------
+    Route::get('/musicat/connection', [MusicatController::class, 'show']);
+    Route::post('/musicat/connect', [MusicatController::class, 'connect']);
+    Route::delete('/musicat/connection', [MusicatController::class, 'disconnect']);
+    Route::post('/musicat/sync', [MusicatController::class, 'sync']);
 
     // --- Personal analytics view -----------------------------------------
     Route::get('/me/top-tracks', [PersonalStatsController::class, 'topTracks']);

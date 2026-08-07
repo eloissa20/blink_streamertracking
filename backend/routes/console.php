@@ -13,3 +13,7 @@ Artisan::command('inspire', function () {
 Schedule::command('statsfm:sync')
     ->everyTenMinutes()
     ->withoutOverlapping();
+
+Schedule::command('musicat:sync')
+    ->everyTenMinutes()
+    ->withoutOverlapping();

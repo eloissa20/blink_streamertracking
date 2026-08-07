@@ -76,6 +76,7 @@ class AuthController extends Controller
         return response()->json([
             'user' => $request->user(),
             'has_connected_statsfm' => $request->user()->hasConnectedStatsFm(),
+            'has_connected_musicat' => $request->user()->hasConnectedMusicat(),
         ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MusicatConnection;
 use App\Models\PlayRecord;
 use App\Models\StatsFmConnection;
 use App\Support\Duration;
@@ -11,13 +12,19 @@ use Illuminate\Support\Facades\Cache;
 class PublicDashboardController extends Controller
 {
     /**
-     * Only plays from users who opted their Stats.fm connection into the
-     * public overview are counted here.
+     * Only plays from users who opted their connection(s) into the public
+     * overview are counted here — a user contributes if either their
+     * Stats.fm (Spotify) connection, their Musicat (Apple Music)
+     * connection, or both, have public sharing turned on.
      */
     private function baseQuery()
     {
         $optedInUserIds = StatsFmConnection::where('include_in_public_overview', true)
-            ->pluck('user_id');
+            ->pluck('user_id')
+            ->merge(
+                MusicatConnection::where('include_in_public_overview', true)->pluck('user_id')
+            )
+            ->unique();
 
         return PlayRecord::query()->whereIn('user_id', $optedInUserIds)->allowedArtists()->matchingConnectedSource();
     }
@@ -34,7 +41,10 @@ class PublicDashboardController extends Controller
                         'this_month' => (clone $this->baseQuery())->where('played_at', '>=', Carbon::now()->startOfMonth())->count(),
                         'this_year' => (clone $this->baseQuery())->where('played_at', '>=', Carbon::now()->startOfYear())->count(),
                     ],
-                    'contributors' => StatsFmConnection::where('include_in_public_overview', true)->count(),
+                    'contributors' => StatsFmConnection::where('include_in_public_overview', true)->pluck('user_id')
+                        ->merge(MusicatConnection::where('include_in_public_overview', true)->pluck('user_id'))
+                        ->unique()
+                        ->count(),
                 ];
             })
         );

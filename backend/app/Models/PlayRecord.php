@@ -16,6 +16,8 @@ class PlayRecord extends Model
         'user_id',
         'statsfm_connection_id',
         'statsfm_stream_id',
+        'musicat_connection_id',
+        'musicat_stream_id',
         'track_id',
         'track_name',
         'artist_id',
@@ -39,6 +41,11 @@ class PlayRecord extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function musicatConnection()
+    {
+        return $this->belongsTo(MusicatConnection::class);
     }
 
     /**
@@ -69,23 +76,36 @@ class PlayRecord extends Model
     }
 
     /**
-     * A connection tracks exactly one service (Spotify or Apple Music).
-     * This is a read-time safety net alongside the same check already
-     * applied when a play is synced in — so even a play left over from
-     * before a user switched services (or from before this feature
-     * existed) is excluded from every count and list. Connections with no
-     * chosen source yet (legacy rows) are left unrestricted.
+     * A connection tracks exactly one service. This is a read-time safety
+     * net alongside the same check already applied when a play is synced
+     * in — so even a play left over from before a user switched services
+     * (or from before this feature existed) is excluded from every count
+     * and list.
+     *
+     * Two kinds of connection can back a play now:
+     *  - Stats.fm connections, which (post-Musicat-migration) only ever
+     *    track Spotify. Legacy rows with no `connected_source` yet are
+     *    left unrestricted rather than dropped.
+     *  - Musicat connections, which are the exclusive source for Apple
+     *    Music and always match `source = apple_music`.
      */
     public function scopeMatchingConnectedSource(Builder $query): Builder
     {
-        return $query->whereExists(function ($sub) {
-            $sub->selectRaw('1')
-                ->from('statsfm_connections')
-                ->whereColumn('statsfm_connections.id', 'play_records.statsfm_connection_id')
-                ->where(function ($q) {
-                    $q->whereColumn('statsfm_connections.connected_source', 'play_records.source')
-                        ->orWhereNull('statsfm_connections.connected_source');
-                });
+        return $query->where(function ($outer) {
+            $outer->whereExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('statsfm_connections')
+                    ->whereColumn('statsfm_connections.id', 'play_records.statsfm_connection_id')
+                    ->where(function ($q) {
+                        $q->whereColumn('statsfm_connections.connected_source', 'play_records.source')
+                            ->orWhereNull('statsfm_connections.connected_source');
+                    });
+            })->orWhereExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('musicat_connections')
+                    ->whereColumn('musicat_connections.id', 'play_records.musicat_connection_id')
+                    ->where('play_records.source', 'apple_music');
+            });
         });
     }
 }

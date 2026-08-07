@@ -33,23 +33,24 @@ class StatsFmController extends Controller
      * Link a Stats.fm account to the authenticated user.
      * Rejected if the user already has a connection, or if the requested
      * Stats.fm account is already linked to a different user.
+     *
+     * Stats.fm connections are Spotify-only now — Apple Music is tracked
+     * exclusively through Musicat (see MusicatController). A Musicat
+     * connection is independent of this one, so a user can have both.
      */
     public function connect(Request $request)
     {
         $user = $request->user();
 
         if ($user->hasConnectedStatsFm()) {
-            $current = $user->statsFmConnection;
-            $currentLabel = $current?->connected_source === 'apple_music' ? 'Apple Music' : 'Spotify';
-
             return response()->json([
-                'message' => "You're already connected to {$currentLabel} via Stats.fm. Disconnect it first to switch services.",
+                'message' => "You're already connected to Spotify via Stats.fm ({$user->statsFmConnection->statsfm_username}). Disconnect it first to link a different account.",
             ], 409);
         }
 
         $validator = Validator::make($request->all(), [
             'statsfm_handle' => ['required', 'string', 'max:100'],
-            'source' => ['required', 'string', 'in:spotify,apple_music'],
+            'source' => ['required', 'string', 'in:spotify'],
         ]);
 
         if ($validator->fails()) {

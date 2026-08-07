@@ -23,11 +23,13 @@ function RequireAuth({ children }) {
   return children;
 }
 
-function RequireStatsFm({ children }) {
-  const { user, hasConnectedStatsFm, loading } = useAuth();
+function RequireConnection({ children }) {
+  const { user, hasAnyConnection, loading } = useAuth();
   if (loading) return <FullScreenLoader />;
   if (!user) return <Navigate to="/login" replace />;
-  if (!hasConnectedStatsFm) return <Navigate to="/connect" replace />;
+  // Dashboard just needs at least one source linked — Stats.fm (Spotify),
+  // Musicat (Apple Music), or both.
+  if (!hasAnyConnection) return <Navigate to="/connect" replace />;
   return children;
 }
 
@@ -50,9 +52,9 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <RequireStatsFm>
+            <RequireConnection>
               <Dashboard />
-            </RequireStatsFm>
+            </RequireConnection>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

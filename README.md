@@ -1,8 +1,20 @@
 # Stream Overview PH
 
-A music-stream analytics platform tracking Spotify + Apple Music (via a single
-linked Stats.fm account per user), with a public Philippines-wide dashboard
-and a private personal dashboard.
+A music-stream analytics platform tracking Spotify (via a linked Stats.fm
+account) and Apple Music (via a linked Musicat account — https://musicat.fm),
+with a public Philippines-wide dashboard and a private personal dashboard.
+
+Each user can link one Stats.fm account (Spotify) and one Musicat account
+(Apple Music) independently — either on its own, or both at once. Apple
+Music data is pulled exclusively from Musicat; Stats.fm is never used for
+Apple Music, even though Stats.fm itself supports it.
+
+> **Musicat API note:** musicat.fm doesn't publish public developer API docs
+> at the time this was written. `app/Services/MusicatService.php` and
+> `config/musicat.php` are written to the same shape as the (documented)
+> Stats.fm integration, but the actual endpoints/response fields are
+> placeholders — confirm the real API surface with Musicat before relying on
+> this in production.
 
 ## ⚠️ How this codebase was produced — read this first
 

@@ -23,18 +23,27 @@ export default function Dashboard() {
 
   const load = useCallback(async (win) => {
     setLoading(true);
-    const [tr, ar, rp, da, conn] = await Promise.all([
+    const [tr, ar, rp, da, sfConn, mcConn] = await Promise.all([
       api.get('/me/top-tracks', { params: { window: win } }),
       api.get('/me/top-artists', { params: { window: win } }),
       api.get('/me/recently-played'),
       api.get('/me/daily-activity'),
       api.get('/statsfm/connection'),
+      api.get('/musicat/connection'),
     ]);
     setTracks(tr.data.tracks);
     setArtists(ar.data.artists);
     setRecent(rp.data.recently_played);
     setDailyActivity(da.data.days);
-    setLastSyncedAt(conn.data.connection?.last_synced_at ?? null);
+
+    // Show whichever connected source synced most recently.
+    const timestamps = [
+      sfConn.data.connection?.last_synced_at,
+      mcConn.data.connection?.last_synced_at,
+    ].filter(Boolean);
+    setLastSyncedAt(
+      timestamps.length ? timestamps.sort().at(-1) : null
+    );
     setLoading(false);
   }, []);
 
@@ -54,7 +63,9 @@ export default function Dashboard() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await api.post('/statsfm/sync');
+      // Sync whichever sources are connected; a 404 just means that
+      // particular service isn't linked, which is fine.
+      await Promise.allSettled([api.post('/statsfm/sync'), api.post('/musicat/sync')]);
       await load(window_);
     } finally {
       setSyncing(false);

@@ -64,7 +64,7 @@ export default function LandingPage() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="mt-4 text-mist text-base sm:text-lg max-w-xl mx-auto px-2"
         >
-          Every stream, tracked in one place — combined from listeners who connected their Stats.fm account.
+          Every stream, tracked in one place — combined from listeners who connected Stats.fm (Spotify) or Musicat (Apple Music).
         </motion.p>
       </section>
 

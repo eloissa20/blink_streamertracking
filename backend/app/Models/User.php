@@ -35,6 +35,11 @@ class User extends Authenticatable
         return $this->hasOne(StatsFmConnection::class);
     }
 
+    public function musicatConnection()
+    {
+        return $this->hasOne(MusicatConnection::class);
+    }
+
     public function playRecords()
     {
         return $this->hasMany(PlayRecord::class);
@@ -43,5 +48,16 @@ class User extends Authenticatable
     public function hasConnectedStatsFm(): bool
     {
         return $this->statsFmConnection()->exists();
+    }
+
+    public function hasConnectedMusicat(): bool
+    {
+        return $this->musicatConnection()->exists();
+    }
+
+    /** True once the user has linked at least one listening source. */
+    public function hasAnyConnection(): bool
+    {
+        return $this->hasConnectedStatsFm() || $this->hasConnectedMusicat();
     }
 }

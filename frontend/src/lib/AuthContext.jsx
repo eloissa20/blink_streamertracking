@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [hasConnectedStatsFm, setHasConnectedStatsFm] = useState(false);
+  const [hasConnectedMusicat, setHasConnectedMusicat] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -19,6 +20,7 @@ export function AuthProvider({ children }) {
       const { data } = await api.get('/auth/me');
       setUser(data.user);
       setHasConnectedStatsFm(data.has_connected_statsfm);
+      setHasConnectedMusicat(data.has_connected_musicat);
     } catch (err) {
       // Only treat this as "logged out" when the server actually rejected
       // the token (401). Network errors, timeouts, or a backend that's
@@ -59,11 +61,24 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('auth_token');
     setUser(null);
     setHasConnectedStatsFm(false);
+    setHasConnectedMusicat(false);
   };
+
+  const hasAnyConnection = hasConnectedStatsFm || hasConnectedMusicat;
 
   return (
     <AuthContext.Provider
-      value={{ user, hasConnectedStatsFm, loading, login, register, logout, refresh }}
+      value={{
+        user,
+        hasConnectedStatsFm,
+        hasConnectedMusicat,
+        hasAnyConnection,
+        loading,
+        login,
+        register,
+        logout,
+        refresh,
+      }}
     >
       {children}
     </AuthContext.Provider>
