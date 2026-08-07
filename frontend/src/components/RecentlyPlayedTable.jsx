@@ -19,7 +19,11 @@ export default function RecentlyPlayedTable({ items, emptyLabel }) {
             {item.artwork_url ? (
               <img src={item.artwork_url} alt="" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-aurora-soft" />
+              <div className="w-full h-full bg-aurora-soft flex items-center justify-center">
+                <span className="font-display font-semibold text-xs text-white">
+                  {item.track_name?.[0]?.toUpperCase() ?? '?'}
+                </span>
+              </div>
             )}
           </div>
 

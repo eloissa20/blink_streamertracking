@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\StatsFmConnection;
+use App\Support\AllowedArtists;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -84,7 +85,7 @@ class StatsFmService
     public function normalizeStream(array $item): array
     {
         $track = $item['track'] ?? [];
-        $artist = $track['artists'][0] ?? [];
+        $artist = $this->attributedArtist($track['artists'] ?? []);
 
         $platform = strtolower($item['platform'] ?? 'spotify');
         $source = str_contains($platform, 'apple') ? 'apple_music' : 'spotify';
@@ -114,6 +115,38 @@ class StatsFmService
             'duration_ms' => (int) ($item['playedMs'] ?? $track['durationMs'] ?? 0),
             'played_at' => $playedAt,
         ];
+    }
+
+    /**
+     * Pick which of a track's credited artists this play should be
+     * attributed to. Stats.fm (mirroring Spotify) lists every credited
+     * artist on a track in `artists`, ordered primary-artist-first — but
+     * "primary" just means top-billed, not "the only one who matters
+     * here". A track where an allowed artist (e.g. LISA) is a *featured*
+     * guest on someone else's track — "Priceless (feat. LISA)", credited
+     * as artists: [ELLA JAY, LISA] — has her at index 1, not 0.
+     *
+     * Blindly taking artists[0] (the old behavior) attributed every such
+     * play to the primary artist instead, who then never matches the
+     * BLACKPINK allow-list — so the play was recorded, but effectively
+     * vanished: never counted, never shown as one of LISA's plays,
+     * anywhere. This scans the full artist list and prefers whichever
+     * credited artist is actually on the allow-list, so a featured
+     * appearance by an allowed artist is still attributed to her. Falls
+     * back to the primary artist when none of the credits are on the
+     * allow-list (that play gets filtered out downstream regardless, so
+     * which non-allowed artist it's nominally attributed to doesn't
+     * matter).
+     */
+    private function attributedArtist(array $artists): array
+    {
+        foreach ($artists as $candidate) {
+            if (AllowedArtists::isAllowed($candidate['name'] ?? null)) {
+                return $candidate;
+            }
+        }
+
+        return $artists[0] ?? [];
     }
 
     /**

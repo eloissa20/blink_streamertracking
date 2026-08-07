@@ -24,7 +24,11 @@ export default function RecentlyPlayedItem({ item, index = 0 }) {
         {item.artwork_url ? (
           <img src={item.artwork_url} alt="" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-aurora-soft" />
+          <div className="w-full h-full bg-aurora-soft flex items-center justify-center">
+            <span className="font-display font-semibold text-xs text-white">
+              {item.track_name?.[0]?.toUpperCase() ?? '?'}
+            </span>
+          </div>
         )}
       </div>
       <div className="min-w-0 flex-1">

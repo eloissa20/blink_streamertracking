@@ -66,13 +66,25 @@ class PlayRecord extends Model
      * Restrict to the BLACKPINK + members allow-list. Applied everywhere
      * plays are read, so anything outside the allow-list — even if it's
      * already sitting in the table from an older sync — is never counted.
+     *
+     * Deliberately CASE-INSENSITIVE. Both syncers (PlayRecordSyncer and
+     * MusicatPlayRecordSyncer) now canonicalize artist_name through
+     * AllowedArtists::canonicalize() before every insert, so new rows are
+     * always stored under one consistent spelling (e.g. "LISA", never
+     * "LiSA" or "Lisa"). This scope stays case-insensitive on top of that
+     * as a read-time safety net for rows written before that
+     * canonicalization existed — an exact-case match here would silently
+     * exclude any such leftover row instead of counting it. See
+     * AllowedArtists::canonicalize() for why matching case-sensitively
+     * doesn't actually protect against the unrelated Japanese singer
+     * "LiSA" in this app's data, and drops real plays instead.
      */
     public function scopeAllowedArtists(Builder $query): Builder
     {
-        $names = AllowedArtists::lowerNames();
-        $placeholders = implode(',', array_fill(0, count($names), '?'));
+        $upperNames = AllowedArtists::matchableUpperNames();
+        $placeholders = implode(',', array_fill(0, count($upperNames), '?'));
 
-        return $query->whereRaw("LOWER(artist_name) IN ($placeholders)", $names);
+        return $query->whereRaw("UPPER(artist_name) IN ({$placeholders})", $upperNames);
     }
 
     /**

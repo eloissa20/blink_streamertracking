@@ -19,7 +19,10 @@ class PlayRecordSyncer
      *   2. as a fallback, the same connection + track + played_at, in case
      *      Stats.fm's API ever returns an inconsistent id for a play we've
      *      already recorded.
-     * Only BLACKPINK + members plays are stored; anything else is skipped.
+     * Every real stream is stored regardless of artist — "Recently played"
+     * should reflect everything the account actually played. The
+     * BLACKPINK/members-only restriction is applied later, only when
+     * aggregating counts (PlayRecord::scopeAllowedArtists), not here.
      * Only plays from the connection's chosen service are stored — a
      * connection tracks exactly one of Spotify or Apple Music, never both.
      * And a play only counts as a stream at all if it meets the same
@@ -33,9 +36,14 @@ class PlayRecordSyncer
         foreach ($items as $item) {
             $normalized = $this->statsFm->normalizeStream($item);
 
-            if (! AllowedArtists::isAllowed($normalized['artist_name'])) {
-                continue;
-            }
+            // Store BLACKPINK/members plays under one consistent spelling
+            // regardless of what casing Stats.fm sent this particular
+            // stream under (it isn't consistent — see
+            // AllowedArtists::canonicalize()). Everything else keeps its
+            // raw artist_name as-is; only allow-listed artists need a
+            // canonical spelling, since only they get aggregated.
+            $normalized['artist_name'] = AllowedArtists::canonicalize($normalized['artist_name'])
+                ?? $normalized['artist_name'];
 
             // A connection tracks exactly one service. If the user connected
             // as Spotify, anything Stats.fm reports from Apple Music (or

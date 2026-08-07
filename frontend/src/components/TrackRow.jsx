@@ -15,7 +15,11 @@ export default function TrackRow({ rank, track, metric, index = 0 }) {
         {track.artwork_url ? (
           <img src={track.artwork_url} alt="" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-aurora-soft" />
+          <div className="w-full h-full bg-aurora-soft flex items-center justify-center">
+            <span className="font-display font-semibold text-xs text-white">
+              {track.track_name?.[0]?.toUpperCase() ?? '?'}
+            </span>
+          </div>
         )}
       </div>
 

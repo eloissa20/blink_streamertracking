@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\AllowedArtists;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Spatie\Browsershot\Browsershot;
@@ -60,6 +61,21 @@ class MusicatService
     /**
      * Render a Musicat profile page and return its fully-rendered body
      * HTML, or null if the page couldn't be loaded/rendered at all.
+     *
+     * The "Recently played" list is NOT part of the page's normal flow —
+     * it's its own internally-scrolling panel (visible as a distinct thin
+     * scrollbar on the rendered page, separate from the browser window's
+     * own scrollbar) with a fixed height and `overflow-y: auto`, and it
+     * lazy-loads/virtualizes its rows: anything past whatever currently
+     * fits in that panel's viewport doesn't exist in the DOM at all until
+     * the panel itself is scrolled. A taller *browser window* (previously
+     * ->windowSize(1280, 8000)) doesn't change that panel's own height at
+     * all, so it never actually triggered more rows to load — confirmed
+     * via musicat:debug-parse consistently returning only the 3
+     * newest rows no matter how tall the window was. This finds every
+     * actually-scrollable element on the page (not just window/body) and
+     * scrolls each one directly, which is what the panel's own lazy-load
+     * logic is listening for.
      */
     private function renderProfileHtml(string $handle): ?string
     {
@@ -67,14 +83,64 @@ class MusicatService
             $shot = Browsershot::url("{$this->profileBaseUrl}/{$handle}")
                 ->noSandbox()
                 ->waitUntilDOMContentLoaded()
+                ->windowSize(1280, 2000)
                 ->setDelay($this->renderDelayMs)
-                ->timeout(45);
+                ->timeout(90);
 
             if ($this->chromePath) {
                 $shot->setChromePath($this->chromePath);
             }
 
-            return $shot->bodyHtml();
+            return $shot->evaluate(<<<'JS'
+                (async () => {
+                    // Any element that actually scrolls internally (own
+                    // scrollHeight taller than its own visible height) is
+                    // a candidate — the "Recently played" panel is one of
+                    // these, not the window. window.scrollTo() alone
+                    // never reaches it.
+                    const findScrollables = () => Array.from(document.querySelectorAll('*'))
+                        .filter((el) => {
+                            const style = getComputedStyle(el);
+                            const scrollsY = style.overflowY === 'auto' || style.overflowY === 'scroll';
+                            return scrollsY && el.scrollHeight > el.clientHeight + 20;
+                        });
+
+                    let lastTotalHeight = 0;
+
+                    for (let round = 0; round < 40; round++) {
+                        const scrollables = findScrollables();
+
+                        if (scrollables.length === 0) {
+                            // No internal panel found (yet, or this page
+                            // genuinely doesn't have one) — fall back to
+                            // scrolling the window itself as a safety net.
+                            window.scrollTo(0, document.body.scrollHeight);
+                        } else {
+                            for (const el of scrollables) {
+                                el.scrollTop = el.scrollHeight;
+                                // Some lazy-load implementations listen for
+                                // a real scroll event rather than polling
+                                // scrollTop, so dispatch one explicitly.
+                                el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                            }
+                        }
+
+                        await new Promise((resolve) => setTimeout(resolve, 600));
+
+                        // Stop once nothing on the page is growing anymore
+                        // (every panel has loaded everything it has).
+                        const totalHeight = Array.from(document.querySelectorAll('*'))
+                            .reduce((sum, el) => sum + el.scrollHeight, 0);
+
+                        if (totalHeight === lastTotalHeight) {
+                            break;
+                        }
+                        lastTotalHeight = totalHeight;
+                    }
+
+                    return document.body.innerHTML;
+                })()
+            JS);
         } catch (\Throwable $e) {
             Log::warning('Musicat profile render failed', [
                 'handle' => $handle,
@@ -99,9 +165,9 @@ class MusicatService
     /**
      * Visible text nodes AND <img> tags together, in document order, so we
      * can tell which photo immediately preceded which line of text. Used
-     * only for pulling artist photos out of the "Top artists" section —
-     * recentlyPlayed()/findUserByHandle() don't need images and stick to
-     * the plain textNodes() above.
+     * for pulling artist photos out of the "Top artists" section and track
+     * artwork out of "Recently played" rows — findUserByHandle() doesn't
+     * need images and sticks to the plain textNodes() above.
      *
      * Each entry is ['type' => 'text'|'img', 'value' => string].
      */
@@ -118,10 +184,54 @@ class MusicatService
             }
 
             $src = $domNode->getAttribute('src');
+
+            // Lazy-loading libraries commonly stash the real image URL in
+            // a data-* attribute and leave `src` blank (or pointing at a
+            // tiny placeholder) until the image scrolls into view. The
+            // tall-viewport fix above should trigger the swap for nearly
+            // everything, but fall back to these as a safety net for any
+            // row that still hasn't swapped by the time we read the DOM.
+            if ($src === '' || str_starts_with($src, 'data:')) {
+                $src = $domNode->getAttribute('data-src')
+                    ?: $domNode->getAttribute('data-lazy-src')
+                    ?: '';
+            }
+
             return $src !== '' ? ['type' => 'img', 'value' => $src] : null;
         });
 
         return array_values(array_filter($nodes));
+    }
+
+    /**
+     * Same reading-order text lines as textNodes(), plus — for each line —
+     * whichever <img> most recently appeared before it (or null). Each
+     * image is attributed to exactly the one text line right after it,
+     * then "used up", since a "Recently played" row on the page reads
+     * [thumbnail img] → track name → artist name → metadata line, and it's
+     * only the track name we want the thumbnail attached to.
+     *
+     * Returns [textLines, imageBeforeLine] — both indexed the same way, so
+     * $imageBeforeLine[$i] is the thumbnail (if any) for $textLines[$i].
+     */
+    private function textNodesWithPrecedingImage(Crawler $crawler): array
+    {
+        $lines = [];
+        $imageBeforeLine = [];
+        $lastImgSrc = null;
+
+        foreach ($this->textAndImageNodes($crawler) as $node) {
+            if ($node['type'] === 'img') {
+                $lastImgSrc = $node['value'];
+                continue;
+            }
+
+            $lines[] = $node['value'];
+            $imageBeforeLine[] = $lastImgSrc;
+            $lastImgSrc = null;
+        }
+
+        return [$lines, $imageBeforeLine];
     }
 
     /**
@@ -172,11 +282,32 @@ class MusicatService
             // Skip rank ("#1") and play-count ("26") lines — the artist
             // name is whichever text line isn't purely one of those, and
             // it's what the most recently seen image belongs to.
+            //
+            // Play counts aren't always bare digit strings — once an
+            // artist has enough plays, Musicat formats the count with a
+            // thousands separator ("1,234") or an abbreviated suffix
+            // ("12.4K"), and ctype_digit() returns false for both. That
+            // let a formatted count fall through as if it were the artist
+            // name: it consumed that card's image (map["1,234"] = photo),
+            // and the real name right after it found lastImgSrc already
+            // used up and got no image at all. That's why higher-played
+            // artists (JISOO, LISA) were consistently missing photos while
+            // lower-count ones (with a plain unformatted number) were
+            // fine — this pattern-matches counts instead of requiring
+            // pure digits.
             $isRank = str_starts_with($node['value'], '#');
-            $isCount = ctype_digit($node['value']);
+            $isCount = (bool) preg_match('/^[\d,.]+[KMB]?$/i', $node['value']);
 
             if (! $isRank && ! $isCount && $lastImgSrc) {
-                $map[$node['value']] = $lastImgSrc;
+                // Key by the canonical spelling (falling back to the raw
+                // scraped text for anyone outside the allow-list) rather
+                // than whatever casing this section happened to render —
+                // MusicatPlayRecordSyncer looks this map up by the same
+                // canonical name it stores plays under, and Musicat
+                // doesn't render a member's name identically in every
+                // section of the page.
+                $key = AllowedArtists::canonicalize($node['value']) ?? $node['value'];
+                $map[$key] = $lastImgSrc;
                 $lastImgSrc = null; // each photo belongs to exactly one card
             }
         }
@@ -234,11 +365,12 @@ class MusicatService
      * items shaped for normalizeStream() — normalized/persisted by
      * MusicatPlayRecordSyncer.
      *
-     * Each row on the page reads, top to bottom: track name, artist name,
-     * then a metadata line like "Apple Music • 08.07.26 2:49 PM • 5 minutes
-     * ago". We scan the page's text nodes in order and, whenever a line
-     * matches that metadata pattern, take the two preceding non-empty text
-     * lines as [track name, artist name].
+     * Each row on the page reads, top to bottom: a cover-art thumbnail,
+     * track name, artist name, then a metadata line like "Apple Music •
+     * 08.07.26 2:49 PM • 5 minutes ago". We scan the page's text nodes in
+     * order and, whenever a line matches that metadata pattern, take the
+     * two preceding non-empty text lines as [track name, artist name], and
+     * whichever image immediately preceded the track name as its artwork.
      */
     public function recentlyPlayed(string $handle, int $limit = 100): array
     {
@@ -249,7 +381,7 @@ class MusicatService
         }
 
         $crawler = new Crawler($html);
-        $lines = $this->textNodes($crawler);
+        [$lines, $imageBeforeLine] = $this->textNodesWithPrecedingImage($crawler);
 
         // Deliberately loose: don't require an exact bullet character or a
         // trailing separator. The rendered page's "•" and surrounding
@@ -257,7 +389,12 @@ class MusicatService
         // ASCII spaces (e.g. could be non-breaking spaces or a different
         // bullet glyph) — matching "some non-digit stuff" between the
         // source name and the date sidesteps that entirely.
-        $metaPattern = '/^(Apple Music|Spotify)[^\d]{1,8}(\d{2}\.\d{2}\.\d{2})\s+(\d{1,2}:\d{2}\s*[AP]M)/iu';
+        //
+        // The trailing "5 minutes ago" / "2 hours ago" / "just now" clause
+        // is captured too (group 4, optional) — see reconcilePlayedAt()
+        // below for why: it's the cross-check that keeps the absolute
+        // date/time parse from silently drifting by whole-hour amounts.
+        $metaPattern = '/^(Apple Music|Spotify)[^\d]{1,8}(\d{2}\.\d{2}\.\d{2})\s+(\d{1,2}:\d{2}\s*[AP]M)(?:[^\w]{1,8}(just now|\d+\s+(?:minute|hour|day)s?\s+ago))?/iu';
 
         $items = [];
         foreach ($lines as $i => $line) {
@@ -276,6 +413,7 @@ class MusicatService
 
             $artistName = $i - 1 >= 0 ? $lines[$i - 1] : null;
             $trackName = $i - 2 >= 0 ? $lines[$i - 2] : null;
+            $artworkUrl = $i - 2 >= 0 ? ($imageBeforeLine[$i - 2] ?? null) : null;
 
             if (! $trackName || ! $artistName) {
                 continue;
@@ -294,9 +432,39 @@ class MusicatService
                 continue; // unparsable timestamp — skip rather than guess
             }
 
+            // Cross-check against the row's own "X ago" text, which is
+            // immune to the timezone assumption above entirely (it's a
+            // plain elapsed duration, not a labeled clock time). If the
+            // render machine's actual timezone ever doesn't match the
+            // "Asia/Manila" assumed above — a bad deploy config, a Chrome
+            // default, whatever — the absolute parse above comes out
+            // wrong by a whole number of hours (in the extreme, a full
+            // 24h if the mismatch straddles midnight), while this relative
+            // figure stays correct. Nudge the absolute value back onto the
+            // relative one whenever they disagree by something that looks
+            // like exactly that kind of whole-hour offset, rather than
+            // ordinary rounding noise (an "X hours ago" bucket is only
+            // ever accurate to the nearest hour to begin with).
+            if ($m[4] ?? null) {
+                $playedAt = $this->reconcilePlayedAt($playedAt, $m[4]);
+            }
+
+            // Musicat is the source of truth for when a track was played,
+            // but a scraped/parsed value can still come out wrong (e.g. a
+            // date-format misread, or a render that straddled midnight).
+            // A "recently played" row can never genuinely be from the
+            // future, so treat any such result as a parse failure and drop
+            // the row rather than surface a bad future-dated entry. A
+            // small grace window absorbs ordinary clock skew between this
+            // server and whatever machine renders the Musicat page.
+            if ($playedAt->isAfter(Carbon::now(config('app.timezone'))->addMinutes(5))) {
+                continue;
+            }
+
             $items[] = [
                 'track_name' => $trackName,
                 'artist_name' => $artistName,
+                'artwork_url' => $artworkUrl,
                 'played_at' => $playedAt,
             ];
 
@@ -310,14 +478,17 @@ class MusicatService
 
     /**
      * Normalize a raw scraped item into the shape PlayRecord expects.
-     * Source is always `apple_music` — see class docblock. Track id and
-     * album/artwork aren't available from the profile page's "Recently
-     * played" rows, so those stay null; artist_image_url also starts null
-     * here since it's not on this section of the page either — it gets
-     * filled in afterward by MusicatPlayRecordSyncer from the "Top
-     * artists" section's photos instead. Duration is a fixed placeholder
-     * since it's never shown on the page (see class docblock for why that
-     * means total-listening-time stats are approximate for Musicat-sourced
+     * Source is always `apple_music` — see class docblock. Track id isn't
+     * available from the profile page's "Recently played" rows, so that
+     * stays null (a stable derived id is used instead — see below);
+     * album_name is likewise never shown on this section of the page.
+     * artwork_url comes straight from the thumbnail recentlyPlayed()
+     * captured next to the track; artist_image_url starts null here since
+     * it's not on this section of the page either — it gets filled in
+     * afterward by MusicatPlayRecordSyncer from the "Top artists"
+     * section's photos instead. Duration is a fixed placeholder since it's
+     * never shown on the page (see class docblock for why that means
+     * total-listening-time stats are approximate for Musicat-sourced
      * plays).
      */
     public function normalizeStream(array $item): array
@@ -331,7 +502,7 @@ class MusicatService
             'artist_id' => strtolower(trim($item['artist_name'])),
             'artist_name' => $item['artist_name'],
             'album_name' => null,
-            'artwork_url' => null,
+            'artwork_url' => $item['artwork_url'] ?? null,
             'artist_image_url' => null,
             'source' => 'apple_music',
             // Placeholder: the profile page never shows a play's duration.
@@ -341,6 +512,59 @@ class MusicatService
             'duration_ms' => 31_000,
             'played_at' => $playedAt,
         ];
+    }
+
+    /**
+     * Parse a "5 minutes ago" / "2 hours ago" / "3 days ago" / "just now"
+     * string into an absolute instant, anchored to right now in the
+     * app's own timezone. Returns null for anything that doesn't match
+     * one of those shapes.
+     */
+    private function parseRelativeAgo(string $text): ?Carbon
+    {
+        $text = strtolower(trim($text));
+        $now = Carbon::now(config('app.timezone'));
+
+        if ($text === 'just now') {
+            return $now;
+        }
+
+        if (! preg_match('/^(\d+)\s+(minute|hour|day)s?\s+ago$/', $text, $m)) {
+            return null;
+        }
+
+        $amount = (int) $m[1];
+
+        return match ($m[2]) {
+            'minute' => $now->subMinutes($amount),
+            'hour' => $now->subHours($amount),
+            'day' => $now->subDays($amount),
+            default => null,
+        };
+    }
+
+    /**
+     * See the call site in recentlyPlayed() for the "why". Only corrects
+     * for drift that looks like a whole-hour (or whole-day) timezone
+     * mistake — anything smaller is just the "X hours ago" bucket's own
+     * rounding and the more precise absolute value is left as-is.
+     */
+    private function reconcilePlayedAt(Carbon $absolute, string $relativeAgoText): Carbon
+    {
+        $relativeEstimate = $this->parseRelativeAgo($relativeAgoText);
+
+        if (! $relativeEstimate) {
+            return $absolute;
+        }
+
+        $diffMinutes = ($absolute->getTimestamp() - $relativeEstimate->getTimestamp()) / 60;
+        $nearestHourMultiple = (int) round($diffMinutes / 60) * 60;
+
+        if ($nearestHourMultiple !== 0 && abs($diffMinutes - $nearestHourMultiple) <= 5) {
+            return $absolute->copy()->subMinutes($nearestHourMultiple);
+        }
+
+        return $absolute;
     }
 
     private function derivedStreamId(string $trackName, string $artistName, string $playedAt): string

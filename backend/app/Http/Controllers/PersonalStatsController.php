@@ -88,9 +88,13 @@ class PersonalStatsController extends Controller
     {
         $userId = $request->user()->id;
 
+        // Deliberately no ->allowedArtists() here: the counted stats
+        // (topTracks/topArtists above) stay BLACKPINK+members-only, but
+        // "recently played" is a log of what was actually played and
+        // shouldn't drop rows just because a feature/collab artist isn't
+        // on that list.
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
-            ->allowedArtists()
             ->matchingConnectedSource()
             ->orderByDesc('played_at')
             ->limit(100)
