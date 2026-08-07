@@ -13,9 +13,9 @@ export default function RecentlyPlayedTable({ items, emptyLabel }) {
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3, delay: Math.min(i * 0.02, 0.6) }}
-          className="flex items-center gap-3 rounded-2xl bg-ink-surface/60 px-3 py-2.5 hover:bg-white/5 transition-colors"
+          className="flex items-center gap-2 sm:gap-3 rounded-2xl bg-ink-surface/60 px-2 sm:px-3 py-2 sm:py-2.5 hover:bg-white/5 transition-colors"
         >
-          <div className="w-11 h-11 rounded-lg bg-ink-surface flex-shrink-0 overflow-hidden">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-ink-surface flex-shrink-0 overflow-hidden">
             {item.artwork_url ? (
               <img src={item.artwork_url} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -28,7 +28,7 @@ export default function RecentlyPlayedTable({ items, emptyLabel }) {
             <p className="truncate text-xs text-mist">{item.artist_name}</p>
           </div>
 
-          <span className="text-xs text-mist whitespace-nowrap font-mono tabular flex-shrink-0">
+          <span className="text-[10px] sm:text-xs text-mist whitespace-nowrap font-mono tabular flex-shrink-0">
             {formatFullDateTime(item.played_at)}
           </span>
         </motion.div>

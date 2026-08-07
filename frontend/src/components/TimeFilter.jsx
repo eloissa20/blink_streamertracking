@@ -12,7 +12,7 @@ export default function TimeFilter({ value, onChange }) {
         <button
           key={opt.key}
           onClick={() => onChange(opt.key)}
-          className={`relative px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+          className={`relative px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
             value === opt.key ? 'text-white' : 'text-mist hover:text-white'
           }`}
         >

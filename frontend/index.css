@@ -10,7 +10,7 @@ body {
   background:
     radial-gradient(ellipse 80% 50% at 50% -10%, rgba(89, 178, 146, 0.25), transparent),
     radial-gradient(ellipse 60% 40% at 90% 10%, rgba(255, 201, 77, 0.12), transparent),
-    #182123;
+    #0B0A12;
   min-height: 100vh;
 }
 
@@ -41,14 +41,14 @@ body {
 .glass-card {
   background: rgba(34, 66, 72, 0.6);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(38, 33, 33, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /* Dark, theme-matching scrollbar for scrollable lists — never falls back to
    the OS's default white/light scrollbar. */
 .dark-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #283b42 transparent;
+  scrollbar-color: #2A2842 transparent;
 }
 .dark-scrollbar::-webkit-scrollbar {
   width: 8px;
@@ -57,13 +57,13 @@ body {
   background: transparent;
 }
 .dark-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #28423f;
+  background-color: #2A2842;
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .dark-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #28423f;
+  background-color: #3a3860;
 }
 
 .tabular {

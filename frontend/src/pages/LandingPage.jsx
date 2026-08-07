@@ -37,9 +37,9 @@ export default function LandingPage() {
   const totals = overview?.total_streams;
 
   return (
-    <div className="max-w-6xl mx-auto px-6 pb-24">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24">
       {/* Hero */}
-      <section className="pt-20 pb-14 text-center">
+      <section className="pt-12 sm:pt-20 pb-10 sm:pb-14 text-center">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -54,7 +54,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.05 }}
-          className="font-display text-4xl md:text-6xl font-semibold tracking-tight text-white"
+          className="font-display text-3xl sm:text-4xl md:text-6xl font-semibold tracking-tight text-white"
         >
           Philippines Stream Overview
         </motion.h1>
@@ -62,7 +62,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="mt-4 text-mist text-lg max-w-xl mx-auto"
+          className="mt-4 text-mist text-base sm:text-lg max-w-xl mx-auto px-2"
         >
           Every stream, tracked in one place — combined from listeners who connected their Stats.fm account.
         </motion.p>
@@ -73,7 +73,7 @@ export default function LandingPage() {
       )}
 
       {/* Hero stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 mb-10">
         <div className="col-span-2 md:col-span-1">
           <StatCard label="All-time" value={totals?.all_time ?? 0} delay={0} accent />
         </div>
@@ -90,7 +90,7 @@ export default function LandingPage() {
       )}
 
       {!loading && (
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
           <Section eyebrow="Ranked" title="Top Tracks">
             <div className="flex flex-col gap-0.5 max-h-[520px] overflow-y-auto dark-scrollbar pr-2">
               {tracks.length === 0 && (

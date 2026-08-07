@@ -35,7 +35,7 @@ export default function RecentlyPlayedItem({ item, index = 0 }) {
       <span className="font-mono tabular text-xs text-mist whitespace-nowrap">
         {item.duration_formatted}
       </span>
-      <span className="text-xs text-mist whitespace-nowrap w-16 text-right">
+      <span className="font-mono tabular text-xs text-mist whitespace-nowrap w-16 text-right">
         {timeAgo(item.played_at)}
       </span>
     </motion.div>

@@ -99,12 +99,12 @@ export default function ActivityChart({ days }) {
   const tooltipY = hovered ? Math.max(PAD_TOP, yFor(Math.max(hovered.spotify, hovered.apple_music)) - 10) : 0;
 
   return (
-    <div className="glass-card rounded-3xl p-6 md:p-8">
+    <div className="glass-card rounded-3xl p-4 sm:p-6 md:p-8">
       <div className="mb-6">
         <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
           Activity
         </p>
-        <h2 className="font-display text-2xl font-semibold text-white">Last 30 days</h2>
+        <h2 className="font-display text-xl sm:text-2xl font-semibold text-white">Last 30 days</h2>
       </div>
 
       <motion.svg

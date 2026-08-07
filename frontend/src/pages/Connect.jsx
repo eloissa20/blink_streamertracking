@@ -63,12 +63,12 @@ export default function Connect() {
   const isLoading = connection === undefined;
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-6">
+    <div className="min-h-[80vh] flex items-center justify-center px-4 sm:px-6">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md glass-card rounded-3xl p-8"
+        className="w-full max-w-md glass-card rounded-3xl p-6 sm:p-8"
       >
         <div className="flex justify-center mb-5">
           <Waveform bars={5} />

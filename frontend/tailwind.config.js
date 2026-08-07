@@ -7,28 +7,30 @@ export default {
         ink: {
           DEFAULT: '#0B0A12',
           soft: '#121120',
-          surface: '#181729',
+          surface: '#224248',
           border: '#2A2842',
         },
         violet: {
-          DEFAULT: '#6C5CE7',
-          bright: '#8B7CFF',
+          DEFAULT: '#59B292',
+          bright: '#7FCBAE',
         },
         teal: {
-          DEFAULT: '#00D9C0',
+          DEFAULT: '#FFC94D',
         },
+        cream: '#FAE7CB',
+        coral: '#FA6781',
         spotify: '#1ED760',
         apple: '#FA2D48',
         mist: '#9C9AB8',
       },
       fontFamily: {
-        display: ['"Space Grotesk"', 'sans-serif'],
+        display: ['"Inter"', 'sans-serif'],
         body: ['"Inter"', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
+        mono: ['"Inter"', 'sans-serif'],
       },
       backgroundImage: {
-        aurora: 'linear-gradient(120deg, #6C5CE7 0%, #00D9C0 100%)',
-        'aurora-soft': 'linear-gradient(120deg, rgba(108,92,231,0.15) 0%, rgba(0,217,192,0.15) 100%)',
+        aurora: 'linear-gradient(120deg, #59B292 0%, #FFC94D 100%)',
+        'aurora-soft': 'linear-gradient(120deg, rgba(89,178,146,0.15) 0%, rgba(255,201,77,0.15) 100%)',
       },
       keyframes: {
         rise: {

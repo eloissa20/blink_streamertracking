@@ -62,22 +62,22 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 pb-24 pt-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24 pt-8 sm:pt-12">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between flex-wrap gap-4 mb-8"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8"
       >
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
             Personal View
           </p>
-          <h1 className="font-display text-3xl font-semibold text-white">
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white">
             Hey {user?.name?.split(' ')[0] ?? 'there'}, here's your sound
           </h1>
           <HeaderClock lastSyncedAt={lastSyncedAt} />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <TimeFilter value={window_} onChange={setWindow} />
           <button
             onClick={handleSync}
@@ -95,7 +95,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
             <StatListCard
               title="Top Tracks"
               items={tracks}
@@ -123,7 +123,7 @@ export default function Dashboard() {
             <h2 className="font-display text-2xl font-semibold text-white mb-4">
               Recently Played
             </h2>
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <p className="text-sm font-medium text-mist mb-3">Spotify</p>
                 <RecentlyPlayedTable
