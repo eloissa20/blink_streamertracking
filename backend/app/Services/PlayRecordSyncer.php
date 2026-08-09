@@ -36,6 +36,15 @@ class PlayRecordSyncer
         foreach ($items as $item) {
             $normalized = $this->statsFm->normalizeStream($item);
 
+            // Stats.fm didn't send a real endTime/range.end for this item —
+            // normalizeStream() deliberately leaves played_at null in that
+            // case instead of guessing. Skip it now rather than store a
+            // play with a fabricated timestamp; it'll pick up a real one
+            // on a later sync once Stats.fm reports it.
+            if ($normalized['played_at'] === null) {
+                continue;
+            }
+
             // Store BLACKPINK/members plays under one consistent spelling
             // regardless of what casing Stats.fm sent this particular
             // stream under (it isn't consistent — see

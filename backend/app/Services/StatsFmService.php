@@ -96,13 +96,26 @@ class StatsFmService
         // existing record — keeping them as raw, differently-formatted
         // strings was causing the duplicate-detection query to never match,
         // so repeat syncs re-inserted the same play.
-        $playedAt = Carbon::parse($item['endTime'] ?? $item['range']['end'] ?? now());
+        //
+        // IMPORTANT: when Stats.fm doesn't send a real `endTime`/`range.end`
+        // for an item, we do NOT fall back to `now()`. Doing that used to
+        // stamp every such item with the exact moment the sync happened —
+        // so a batch of several tracks missing this field all landed on
+        // the *same* timestamp (the sync run's clock time), which showed
+        // up in "Recently Played" as multiple different songs all "played"
+        // at the identical minute/second. That's not a real play time, so
+        // rather than invent one we leave `played_at` null here and let
+        // PlayRecordSyncer skip the item — better to sync it on a later
+        // pass once Stats.fm actually reports a real timestamp for it than
+        // to store a fabricated one that corrupts ordering and stats.
+        $rawPlayedAt = $item['endTime'] ?? $item['range']['end'] ?? null;
+        $playedAt = $rawPlayedAt !== null ? Carbon::parse($rawPlayedAt) : null;
 
         return [
             'statsfm_stream_id' => (string) (
                 $item['id']
                 ?? $item['range']['start']
-                ?? $this->derivedStreamId($track['id'] ?? '', $playedAt->toIso8601String(), $platform)
+                ?? $this->derivedStreamId($track['id'] ?? '', $playedAt?->toIso8601String() ?? 'unknown', $platform)
             ),
             'track_id' => (string) ($track['id'] ?? ''),
             'track_name' => $track['name'] ?? 'Unknown Track',
