@@ -15,7 +15,13 @@ export default function TrackRow({ rank, track, metric, index = 0 }) {
         {track.artwork_url ? (
           <img src={track.artwork_url} alt="" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-aurora-soft flex items-center justify-center">
+          <div
+            className="w-full h-full flex items-center justify-center transition-[background] duration-500"
+            style={{
+              background:
+                'linear-gradient(120deg, var(--theme-accent-soft, rgba(89,178,146,0.15)) 0%, var(--theme-accent-soft-2, rgba(255,201,77,0.15)) 100%)',
+            }}
+          >
             <span className="font-display font-semibold text-xs text-white">
               {track.track_name?.[0]?.toUpperCase() ?? '?'}
             </span>

@@ -10,7 +10,12 @@ export default function ArtistRow({ rank, artist, metric, index = 0 }) {
     >
       <span className="font-mono text-mist text-xs sm:text-sm w-4 sm:w-6 text-right tabular flex-shrink-0">{rank}</span>
 
-      <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-aurora flex-shrink-0 flex items-center justify-center font-display font-semibold text-sm overflow-hidden">
+      <div
+        className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex-shrink-0 flex items-center justify-center font-display font-semibold text-sm overflow-hidden transition-[background] duration-500"
+        style={{
+          background: 'linear-gradient(120deg, var(--theme-accent, #59B292) 0%, var(--theme-accent-strong, #7FCBAE) 100%)',
+        }}
+      >
         {artist.artist_image_url ? (
           <img src={artist.artist_image_url} alt="" className="w-full h-full object-cover" />
         ) : (

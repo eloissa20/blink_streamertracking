@@ -67,16 +67,22 @@ export default function LandingPage() {
 
   const totals = overview?.total_streams;
   const copy = PLATFORM_COPY[platform];
+  // Drives every themed CSS var in index.css (background, accents, card
+  // radius, scrollbars, waveform) — see the "Platform theming" block
+  // there for what each value controls.
+  const themeKey = platform === 'apple_music' ? 'apple_music' : 'spotify';
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24">
+    <div data-theme={themeKey} className="theme-surface min-h-screen">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24">
       {/* Hero */}
       <section className="pt-12 sm:pt-20 pb-10 sm:pb-14 text-center">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-violet-bright font-semibold mb-5"
+          className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] font-semibold mb-5 transition-colors duration-500"
+          style={{ color: 'var(--theme-accent-strong)' }}
         >
           <Waveform bars={3} />
           Live · Spotify &amp; Apple Music
@@ -169,6 +175,7 @@ export default function LandingPage() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
