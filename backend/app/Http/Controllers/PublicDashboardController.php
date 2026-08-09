@@ -91,12 +91,42 @@ class PublicDashboardController extends Controller
         $platform = $this->platform($request);
 
         $tracks = Cache::remember("public_dashboard_top_tracks:{$platform}", 60, function () use ($platform) {
-            return (clone $this->baseQuery($platform))
+            $tracks = (clone $this->baseQuery($platform))
                 ->selectRaw('track_id, track_name, artist_name, album_name, artwork_url, source, COUNT(*) as stream_count')
                 ->groupBy('track_id', 'track_name', 'artist_name', 'album_name', 'artwork_url', 'source')
                 ->orderByDesc('stream_count')
                 ->limit(25)
                 ->get();
+
+            $trackIds = $tracks->pluck('track_id')->all();
+            $todayStart = Carbon::now()->startOfDay();
+            $yesterdayStart = (clone $todayStart)->subDay();
+
+            // Per-track streams picked up today vs. yesterday, so the
+            // public page can show each track's daily contribution
+            // ("+123") and whether it's trending up or down against
+            // yesterday's number.
+            $todayCounts = (clone $this->baseQuery($platform))
+                ->whereIn('track_id', $trackIds)
+                ->where('played_at', '>=', $todayStart)
+                ->selectRaw('track_id, COUNT(*) as c')
+                ->groupBy('track_id')
+                ->pluck('c', 'track_id');
+
+            $yesterdayCounts = (clone $this->baseQuery($platform))
+                ->whereIn('track_id', $trackIds)
+                ->where('played_at', '>=', $yesterdayStart)
+                ->where('played_at', '<', $todayStart)
+                ->selectRaw('track_id, COUNT(*) as c')
+                ->groupBy('track_id')
+                ->pluck('c', 'track_id');
+
+            return $tracks->map(function ($track) use ($todayCounts, $yesterdayCounts) {
+                $track->today_count = (int) ($todayCounts[$track->track_id] ?? 0);
+                $track->yesterday_count = (int) ($yesterdayCounts[$track->track_id] ?? 0);
+
+                return $track;
+            });
         });
 
         return response()->json(['platform' => $platform, 'tracks' => $tracks]);

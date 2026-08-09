@@ -8,6 +8,7 @@ import ArtistRow from '../components/ArtistRow';
 import RecentlyPlayedTable from '../components/RecentlyPlayedTable';
 import PlatformTabs from '../components/PlatformTabs';
 import Waveform from '../components/Waveform';
+import TotalStreamsTable from '../components/TotalStreamsTable';
 
 const PLATFORM_COPY = {
   spotify: {
@@ -173,6 +174,10 @@ export default function LandingPage() {
               </div>
             </Section>
           </div>
+
+          <Section eyebrow="Lifetime" title="Total Streams">
+            <TotalStreamsTable tracks={tracks} emptyLabel={copy.emptyLabel} />
+          </Section>
         </div>
       )}
     </div>
