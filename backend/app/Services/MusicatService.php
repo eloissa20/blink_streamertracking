@@ -76,6 +76,26 @@ class MusicatService
      * actually-scrollable element on the page (not just window/body) and
      * scrolls each one directly, which is what the panel's own lazy-load
      * logic is listening for.
+     *
+     * IMPORTANT — virtualization also EVICTS rows, not just defers them.
+     * As the panel is scrolled further to load older rows, whatever rows
+     * were rendered earlier (including the newest ones, right after
+     * whatever we already saved on a previous sync) can get unmounted
+     * from the DOM once they're far enough outside the panel's current
+     * viewport. Grabbing document.body.innerHTML only once, after
+     * scrolling settles, therefore only reflects whatever rows happen to
+     * still be mounted at that final scroll position — not everything
+     * that was ever rendered along the way. That's what produced the
+     * missing-chunk-in-the-middle bug: a whole stretch of history would
+     * flash into the DOM mid-scroll and then get evicted again before the
+     * snapshot was taken, so it was scraped by nobody, ever.
+     *
+     * The fix is to snapshot the panel's rows at EVERY scroll round (not
+     * just the end) and accumulate them into a de-duplicated, order-
+     * preserving set, then splice that full accumulated set back into the
+     * panel before reading out the final HTML. That way a row only has to
+     * be mounted for one round, at any point during scrolling, to survive
+     * into what we return — eviction afterwards no longer loses it.
      */
     private function renderProfileHtml(string $handle): ?string
     {
@@ -105,9 +125,52 @@ class MusicatService
                             return scrollsY && el.scrollHeight > el.clientHeight + 20;
                         });
 
+                    // Virtualized lists commonly wrap every row in one
+                    // inner "sizer" div (position: relative, huge height)
+                    // that itself sits inside the scrollable panel — drill
+                    // into that wrapper so we snapshot the actual row
+                    // elements, not the single div that contains all of
+                    // them.
+                    const rowContainer = (panel) => {
+                        let container = panel;
+                        while (
+                            container.children.length === 1 &&
+                            container.children[0].children.length > 1
+                        ) {
+                            container = container.children[0];
+                        }
+                        return container;
+                    };
+
+                    // panel element -> Map(rowTextContent -> rowOuterHTML),
+                    // built up across every round so rows that later get
+                    // evicted by virtualization are still remembered.
+                    const seenRowsByPanel = new Map();
+
+                    const snapshotRows = () => {
+                        for (const panel of findScrollables()) {
+                            if (!seenRowsByPanel.has(panel)) {
+                                seenRowsByPanel.set(panel, new Map());
+                            }
+                            const seen = seenRowsByPanel.get(panel);
+
+                            for (const row of Array.from(rowContainer(panel).children)) {
+                                const key = row.textContent.trim();
+                                if (key && !seen.has(key)) {
+                                    seen.set(key, row.outerHTML);
+                                }
+                            }
+                        }
+                    };
+
                     let lastTotalHeight = 0;
 
                     for (let round = 0; round < 40; round++) {
+                        // Snapshot BEFORE scrolling further, so this
+                        // round's currently-mounted rows are captured
+                        // before anything has a chance to be evicted.
+                        snapshotRows();
+
                         const scrollables = findScrollables();
 
                         if (scrollables.length === 0) {
@@ -133,9 +196,21 @@ class MusicatService
                             .reduce((sum, el) => sum + el.scrollHeight, 0);
 
                         if (totalHeight === lastTotalHeight) {
+                            // One last catch-up snapshot of wherever
+                            // scrolling finally settled, then stop.
+                            snapshotRows();
                             break;
                         }
                         lastTotalHeight = totalHeight;
+                    }
+
+                    // Replace each virtualized panel's rows with every row
+                    // ever observed across all rounds (first-seen order,
+                    // which for a newest-first list stays newest-to-oldest)
+                    // so nothing that scrolled through and got evicted is
+                    // lost from what we return.
+                    for (const [panel, seen] of seenRowsByPanel.entries()) {
+                        rowContainer(panel).innerHTML = Array.from(seen.values()).join('');
                     }
 
                     return document.body.innerHTML;
@@ -371,8 +446,15 @@ class MusicatService
      * order and, whenever a line matches that metadata pattern, take the
      * two preceding non-empty text lines as [track name, artist name], and
      * whichever image immediately preceded the track name as its artwork.
+     *
+     * $limit is a safety ceiling on parsing/storage cost, not a
+     * "how far back Musicat lets us look" cap — renderProfileHtml() now
+     * accumulates every row seen across the whole scroll (see its
+     * docblock), so raising this simply gives MusicatPlayRecordSyncer more
+     * room to fill in a large gap (e.g. after a missed sync run) in one
+     * pass, rather than only ever returning the newest handful.
      */
-    public function recentlyPlayed(string $handle, int $limit = 100): array
+    public function recentlyPlayed(string $handle, int $limit = 300): array
     {
         $html = $this->renderProfileHtml($handle);
 
