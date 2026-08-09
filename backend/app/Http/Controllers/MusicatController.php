@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\MusicatConnection;
 use App\Services\MusicatPlayRecordSyncer;
 use App\Services\MusicatService;
+use App\Support\Exceptions\SourceUnavailableException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class MusicatController extends Controller
@@ -79,7 +81,19 @@ class MusicatController extends Controller
             'connected_at' => now(),
         ]);
 
-        $this->syncer->sync($connection);
+        // The initial sync right after connecting is a nice-to-have, not a
+        // condition of the connection itself succeeding — a profile that
+        // fails to render on this first attempt (slow page, transient
+        // Musicat/Chromium hiccup) shouldn't undo an otherwise-valid
+        // connect. The user can always hit "Sync now" once linked.
+        try {
+            $this->syncer->sync($connection);
+        } catch (SourceUnavailableException $e) {
+            Log::warning('Initial Musicat sync failed after connect', [
+                'connection_id' => $connection->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'message' => 'Musicat account connected.',
@@ -100,7 +114,16 @@ class MusicatController extends Controller
         return response()->json(['message' => 'Musicat account disconnected.']);
     }
 
-    /** Manually trigger a re-sync of recently played Apple Music data. */
+    /**
+     * Manually trigger a re-sync of recently played Apple Music data.
+     *
+     * If the Musicat profile can't be reached/rendered this attempt, that
+     * is now a real failure response (not a false "Synced." success) —
+     * last_synced_at is deliberately left untouched so "Last synced X ago"
+     * on the dashboard keeps reflecting the last time a sync actually
+     * completed, rather than silently jumping to "just now" for an
+     * attempt that fetched nothing.
+     */
     public function sync(Request $request)
     {
         $connection = $request->user()->musicatConnection;
@@ -109,10 +132,24 @@ class MusicatController extends Controller
             return response()->json(['message' => 'No connected account.'], 404);
         }
 
-        $inserted = $this->syncer->sync($connection);
+        try {
+            $inserted = $this->syncer->sync($connection);
+        } catch (SourceUnavailableException $e) {
+            Log::warning('Musicat sync failed', [
+                'connection_id' => $connection->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => "Couldn't reach your Musicat profile to sync it — it may be temporarily down, or your profile may have been set to private. Your last successful sync time is unchanged.",
+                'synced' => false,
+                'last_synced_at' => $connection->last_synced_at,
+            ], 502);
+        }
 
         return response()->json([
             'message' => "Synced. {$inserted} new plays imported.",
+            'synced' => true,
             'last_synced_at' => $connection->fresh()->last_synced_at,
         ]);
     }

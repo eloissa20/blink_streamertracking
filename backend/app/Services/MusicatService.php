@@ -419,6 +419,18 @@ class MusicatService
                 continue;
             }
 
+            // Musicat's row credits every artist on the track as one line,
+            // e.g. "LISA, Tyla" or "JISOO, ZAYN" — not just the allow-listed
+            // member. Resolve that down to whichever credited artist this
+            // play should be attributed to before it goes any further. See
+            // attributedArtistName() for why this matters: without it, a
+            // collab where the allowed member isn't credited first (or is
+            // one of several names on the line) never matches
+            // AllowedArtists::isAllowed()'s exact comparison downstream in
+            // MusicatPlayRecordSyncer, and the whole play is silently
+            // dropped — not stored anywhere, not just missing a photo.
+            $artistName = $this->attributedArtistName($artistName);
+
             $playedAt = null;
             try {
                 // Musicat renders timestamps in the local time of whatever
@@ -474,6 +486,49 @@ class MusicatService
         }
 
         return $items;
+    }
+
+    /**
+     * Pick which credited artist a Musicat "Recently played" row should be
+     * attributed to. The row's artist line is plain rendered text, not a
+     * structured list — a collab shows up as a single string like "LISA,
+     * Tyla", "JISOO, ZAYN", or "ROSÉ, Bruno Mars", with the allow-listed
+     * member not always credited first (e.g. "Ella Jay, LISA").
+     *
+     * Mirrors StatsFmService::attributedArtist() (same bug, same fix, just
+     * a delimited string here instead of Spotify's structured `artists`
+     * array): split on the punctuation/words a credit line uses to join
+     * multiple artists, and prefer whichever piece is actually on the
+     * allow-list. Falls back to the first-credited (primary) artist when
+     * none of the pieces are allowed — that play gets filtered out
+     * downstream regardless, so which non-allowed name it's nominally
+     * attributed to doesn't matter.
+     *
+     * A line with no separator at all (the common case — just "JENNIE")
+     * splits into one piece and returns unchanged.
+     */
+    private function attributedArtistName(string $rawArtistLine): string
+    {
+        $pieces = preg_split(
+            '/\s*(?:,|&|\bfeat\.?\b|\bfeaturing\b|\bft\.?\b|\bwith\b|\bx\b|\band\b)\s*/i',
+            $rawArtistLine,
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        $pieces = array_values(array_filter(array_map('trim', $pieces), fn ($p) => $p !== ''));
+
+        if (empty($pieces)) {
+            return $rawArtistLine;
+        }
+
+        foreach ($pieces as $candidate) {
+            if (AllowedArtists::isAllowed($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return $pieces[0];
     }
 
     /**

@@ -6,19 +6,49 @@ use App\Models\MusicatConnection;
 use App\Models\PlayRecord;
 use App\Models\StatsFmConnection;
 use App\Support\Duration;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\Rule;
 
 class PublicDashboardController extends Controller
 {
+    /**
+     * The public page is a tab switcher between two completely separate
+     * platform views (Spotify via Stats.fm, Apple Music via Musicat).
+     * Every public endpoint is scoped to exactly one of these at a time
+     * so the two tabs never mix data — the request must say which one it
+     * wants via ?platform=spotify|apple_music.
+     */
+    private const PLATFORM_SOURCES = [
+        'spotify' => 'spotify',
+        'apple_music' => 'apple_music',
+    ];
+
+    private function platform(Request $request): string
+    {
+        $request->validate([
+            'platform' => ['required', Rule::in(array_keys(self::PLATFORM_SOURCES))],
+        ]);
+
+        return $request->query('platform');
+    }
+
     /**
      * Only plays from users who opted their connection(s) into the public
      * overview are counted here — a user contributes if either their
      * Stats.fm (Spotify) connection, their Musicat (Apple Music)
      * connection, or both, have public sharing turned on.
+     *
+     * Always scoped to a single platform's `source` on top of that, so a
+     * request for the Spotify tab can never pull in an Apple Music row
+     * (or vice versa) even though both connection types can belong to the
+     * same opted-in user.
      */
-    private function baseQuery()
+    private function baseQuery(string $platform)
     {
+        $source = self::PLATFORM_SOURCES[$platform];
+
         $optedInUserIds = StatsFmConnection::where('include_in_public_overview', true)
             ->pluck('user_id')
             ->merge(
@@ -26,34 +56,42 @@ class PublicDashboardController extends Controller
             )
             ->unique();
 
-        return PlayRecord::query()->whereIn('user_id', $optedInUserIds)->allowedArtists()->matchingConnectedSource();
+        return PlayRecord::query()
+            ->whereIn('user_id', $optedInUserIds)
+            ->where('source', $source)
+            ->allowedArtists()
+            ->matchingConnectedSource();
     }
 
-    public function overview()
+    public function overview(Request $request)
     {
+        $platform = $this->platform($request);
+
         return response()->json(
-            Cache::remember('public_dashboard_overview', 60, function () {
+            Cache::remember("public_dashboard_overview:{$platform}", 60, function () use ($platform) {
                 return [
+                    'platform' => $platform,
                     'total_streams' => [
-                        'all_time' => (clone $this->baseQuery())->count(),
-                        'today' => (clone $this->baseQuery())->where('played_at', '>=', Carbon::now()->startOfDay())->count(),
-                        'this_week' => (clone $this->baseQuery())->where('played_at', '>=', Carbon::now()->startOfWeek())->count(),
-                        'this_month' => (clone $this->baseQuery())->where('played_at', '>=', Carbon::now()->startOfMonth())->count(),
-                        'this_year' => (clone $this->baseQuery())->where('played_at', '>=', Carbon::now()->startOfYear())->count(),
+                        'all_time' => (clone $this->baseQuery($platform))->count(),
+                        'today' => (clone $this->baseQuery($platform))->where('played_at', '>=', Carbon::now()->startOfDay())->count(),
+                        'this_week' => (clone $this->baseQuery($platform))->where('played_at', '>=', Carbon::now()->startOfWeek())->count(),
+                        'this_month' => (clone $this->baseQuery($platform))->where('played_at', '>=', Carbon::now()->startOfMonth())->count(),
+                        'this_year' => (clone $this->baseQuery($platform))->where('played_at', '>=', Carbon::now()->startOfYear())->count(),
                     ],
-                    'contributors' => StatsFmConnection::where('include_in_public_overview', true)->pluck('user_id')
-                        ->merge(MusicatConnection::where('include_in_public_overview', true)->pluck('user_id'))
-                        ->unique()
-                        ->count(),
+                    'contributors' => (clone $this->baseQuery($platform))
+                        ->distinct('user_id')
+                        ->count('user_id'),
                 ];
             })
         );
     }
 
-    public function topTracks()
+    public function topTracks(Request $request)
     {
-        $tracks = Cache::remember('public_dashboard_top_tracks', 60, function () {
-            return (clone $this->baseQuery())
+        $platform = $this->platform($request);
+
+        $tracks = Cache::remember("public_dashboard_top_tracks:{$platform}", 60, function () use ($platform) {
+            return (clone $this->baseQuery($platform))
                 ->selectRaw('track_id, track_name, artist_name, album_name, artwork_url, source, COUNT(*) as stream_count')
                 ->groupBy('track_id', 'track_name', 'artist_name', 'album_name', 'artwork_url', 'source')
                 ->orderByDesc('stream_count')
@@ -61,13 +99,15 @@ class PublicDashboardController extends Controller
                 ->get();
         });
 
-        return response()->json(['tracks' => $tracks]);
+        return response()->json(['platform' => $platform, 'tracks' => $tracks]);
     }
 
-    public function topArtists()
+    public function topArtists(Request $request)
     {
-        $artists = Cache::remember('public_dashboard_top_artists', 60, function () {
-            return (clone $this->baseQuery())
+        $platform = $this->platform($request);
+
+        $artists = Cache::remember("public_dashboard_top_artists:{$platform}", 60, function () use ($platform) {
+            return (clone $this->baseQuery($platform))
                 ->selectRaw('artist_id, artist_name, MAX(artist_image_url) as artist_image_url,
                     COUNT(*) as stream_count, COUNT(DISTINCT track_id) as track_count')
                 ->groupBy('artist_id', 'artist_name')
@@ -76,6 +116,39 @@ class PublicDashboardController extends Controller
                 ->get();
         });
 
-        return response()->json(['artists' => $artists]);
+        return response()->json(['platform' => $platform, 'artists' => $artists]);
+    }
+
+    /**
+     * Public "recently played", scoped to one platform just like the rest
+     * of this controller. Unlike the personal /me/recently-played
+     * endpoint, this stays behind ->allowedArtists() — the public page is
+     * a BLACKPINK-only leaderboard end to end, so every section
+     * (including recently played) only ever shows BLACKPINK/members
+     * plays. The "show non-allow-listed artists in recently played" rule
+     * is a My Stats-only behaviour (see PersonalStatsController).
+     */
+    public function recentlyPlayed(Request $request)
+    {
+        $platform = $this->platform($request);
+
+        $rows = Cache::remember("public_dashboard_recently_played:{$platform}", 60, function () use ($platform) {
+            return (clone $this->baseQuery($platform))
+                ->orderByDesc('played_at')
+                ->limit(50)
+                ->get()
+                ->map(fn ($row) => [
+                    'track_id' => $row->track_id,
+                    'track_name' => $row->track_name,
+                    'artist_name' => $row->artist_name,
+                    'album_name' => $row->album_name,
+                    'artwork_url' => $row->artwork_url,
+                    'source' => $row->source,
+                    'duration_formatted' => Duration::humanize($row->duration_ms),
+                    'played_at' => $row->played_at->toIso8601String(),
+                ]);
+        });
+
+        return response()->json(['platform' => $platform, 'recently_played' => $rows]);
     }
 }

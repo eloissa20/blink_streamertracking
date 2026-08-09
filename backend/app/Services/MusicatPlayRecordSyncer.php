@@ -12,6 +12,15 @@ use App\Support\StreamRules;
  * Mirrors PlayRecordSyncer's Stats.fm logic exactly, but writes
  * musicat_connection_id / musicat_stream_id instead, and every row is
  * source = apple_music since that's all a Musicat connection ever is here.
+ *
+ * Every real stream is stored regardless of artist — just like the
+ * Stats.fm syncer — so Apple Music "recently played" reflects everything
+ * the account actually played. The BLACKPINK/members-only restriction is
+ * applied later, only when aggregating counts (PlayRecord::scopeAllowedArtists
+ * / AllowedArtists), never at sync time. This used to skip non-allow-listed
+ * artists outright, which meant Apple Music's recently-played could never
+ * show anything but BLACKPINK — inconsistent with the Spotify side and
+ * with the "everything shows in Recently Played" rule.
  */
 class MusicatPlayRecordSyncer
 {
@@ -42,9 +51,14 @@ class MusicatPlayRecordSyncer
         foreach ($items as $item) {
             $normalized = $this->musicat->normalizeStream($item);
 
-            if (! AllowedArtists::isAllowed($normalized['artist_name'])) {
-                continue;
-            }
+            // Store BLACKPINK/members plays under one consistent spelling
+            // regardless of what casing Musicat's scrape sent this
+            // particular stream under (see AllowedArtists::canonicalize()).
+            // Everything else keeps its raw artist_name as-is; only
+            // allow-listed artists need a canonical spelling, since only
+            // they get aggregated.
+            $normalized['artist_name'] = AllowedArtists::canonicalize($normalized['artist_name'])
+                ?? $normalized['artist_name'];
 
             if (! StreamRules::countsAsStream($normalized['duration_ms'])) {
                 continue;

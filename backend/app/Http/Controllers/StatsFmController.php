@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\StatsFmConnection;
 use App\Services\PlayRecordSyncer;
 use App\Services\StatsFmService;
+use App\Support\Exceptions\SourceUnavailableException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class StatsFmController extends Controller
@@ -82,7 +84,17 @@ class StatsFmController extends Controller
             'connected_at' => now(),
         ]);
 
-        $this->syncer->sync($connection);
+        // See MusicatController::connect() for why this stays best-effort:
+        // a first-sync hiccup right after connecting shouldn't undo an
+        // otherwise-valid connection.
+        try {
+            $this->syncer->sync($connection);
+        } catch (SourceUnavailableException $e) {
+            Log::warning('Initial Stats.fm sync failed after connect', [
+                'connection_id' => $connection->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return response()->json([
             'message' => 'Stats.fm account connected.',
@@ -103,7 +115,11 @@ class StatsFmController extends Controller
         return response()->json(['message' => 'Stats.fm account disconnected.']);
     }
 
-    /** Manually trigger a re-sync of recently played data. */
+    /**
+     * Manually trigger a re-sync of recently played data. See the
+     * matching Musicat::sync() docblock — a failed attempt now reports
+     * itself honestly instead of silently bumping last_synced_at.
+     */
     public function sync(Request $request)
     {
         $connection = $request->user()->statsFmConnection;
@@ -112,10 +128,24 @@ class StatsFmController extends Controller
             return response()->json(['message' => 'No connected account.'], 404);
         }
 
-        $inserted = $this->syncer->sync($connection);
+        try {
+            $inserted = $this->syncer->sync($connection);
+        } catch (SourceUnavailableException $e) {
+            Log::warning('Stats.fm sync failed', [
+                'connection_id' => $connection->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => "Couldn't reach Stats.fm to sync right now. Your last successful sync time is unchanged.",
+                'synced' => false,
+                'last_synced_at' => $connection->last_synced_at,
+            ], 502);
+        }
 
         return response()->json([
             'message' => "Synced. {$inserted} new plays imported.",
+            'synced' => true,
             'last_synced_at' => $connection->fresh()->last_synced_at,
         ]);
     }

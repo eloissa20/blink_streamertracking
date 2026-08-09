@@ -1,40 +1,72 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import api from '../api/client';
 import StatCard from '../components/StatCard';
 import Section from '../components/Section';
 import TrackRow from '../components/TrackRow';
 import ArtistRow from '../components/ArtistRow';
+import RecentlyPlayedTable from '../components/RecentlyPlayedTable';
+import PlatformTabs from '../components/PlatformTabs';
 import Waveform from '../components/Waveform';
 
+const PLATFORM_COPY = {
+  spotify: {
+    tagline: "Every stream, tracked in one place — powered by Stats.fm's Spotify data.",
+    emptyLabel: 'No Spotify streams recorded yet.',
+    recentEmptyLabel: 'No recent Spotify plays yet.',
+  },
+  apple_music: {
+    tagline: "Every stream, tracked in one place — powered by Musicat's Apple Music data.",
+    emptyLabel: 'No Apple Music streams recorded yet.',
+    recentEmptyLabel: 'No recent Apple Music plays yet.',
+  },
+};
+
 export default function LandingPage() {
+  const [platform, setPlatform] = useState('spotify');
+
+  // Each tab's data is fetched fresh and kept in its own state slot, so
+  // switching tabs never mixes Spotify and Apple Music numbers together.
   const [overview, setOverview] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [artists, setArtists] = useState([]);
+  const [recentlyPlayed, setRecentlyPlayed] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback((platformKey) => {
     let mounted = true;
+    setLoading(true);
+    setError(null);
 
     Promise.all([
-      api.get('/public/overview'),
-      api.get('/public/top-tracks'),
-      api.get('/public/top-artists'),
+      api.get('/public/overview', { params: { platform: platformKey } }),
+      api.get('/public/top-tracks', { params: { platform: platformKey } }),
+      api.get('/public/top-artists', { params: { platform: platformKey } }),
+      api.get('/public/recently-played', { params: { platform: platformKey } }),
     ])
-      .then(([ov, tr, ar]) => {
+      .then(([ov, tr, ar, rp]) => {
         if (!mounted) return;
         setOverview(ov.data);
         setTracks(tr.data.tracks);
         setArtists(ar.data.artists);
+        setRecentlyPlayed(rp.data.recently_played);
       })
       .catch(() => mounted && setError('Could not reach the API. Is the Laravel backend running?'))
       .finally(() => mounted && setLoading(false));
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
+  useEffect(() => {
+    const cleanup = load(platform);
+    return cleanup;
+  }, [platform, load]);
+
   const totals = overview?.total_streams;
+  const copy = PLATFORM_COPY[platform];
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24">
@@ -64,8 +96,17 @@ export default function LandingPage() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="mt-4 text-mist text-base sm:text-lg max-w-xl mx-auto px-2"
         >
-          Every stream, tracked in one place — combined from listeners who connected Stats.fm (Spotify) or Musicat (Apple Music).
+          {copy.tagline}
         </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.15 }}
+          className="mt-8 flex justify-center"
+        >
+          <PlatformTabs value={platform} onChange={setPlatform} />
+        </motion.div>
       </section>
 
       {error && (
@@ -90,40 +131,42 @@ export default function LandingPage() {
       )}
 
       {!loading && (
-        <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
-          <Section eyebrow="Ranked" title="Top Tracks">
-            <div className="flex flex-col gap-0.5 max-h-[520px] overflow-y-auto dark-scrollbar pr-2">
-              {tracks.length === 0 && (
-                <p className="text-mist text-sm py-6 text-center">No streams recorded yet.</p>
-              )}
-              {tracks.map((t, i) => (
-                <TrackRow
-                  key={t.track_id}
-                  rank={i + 1}
-                  track={t}
-                  metric={`${Number(t.stream_count).toLocaleString()} streams`}
-                  index={i}
-                />
-              ))}
-            </div>
-          </Section>
+        <div className="flex flex-col gap-4 sm:gap-6">
+          <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
+            <Section eyebrow="Ranked" title="Top Tracks">
+              <div className="flex flex-col gap-0.5 max-h-[520px] overflow-y-auto dark-scrollbar pr-2">
+                {tracks.length === 0 && (
+                  <p className="text-mist text-sm py-6 text-center">{copy.emptyLabel}</p>
+                )}
+                {tracks.map((t, i) => (
+                  <TrackRow
+                    key={t.track_id}
+                    rank={i + 1}
+                    track={t}
+                    metric={`${Number(t.stream_count).toLocaleString()} streams`}
+                    index={i}
+                  />
+                ))}
+              </div>
+            </Section>
 
-          <Section eyebrow="Ranked" title="Top Artists">
-            <div className="flex flex-col gap-0.5">
-              {artists.length === 0 && (
-                <p className="text-mist text-sm py-6 text-center">No streams recorded yet.</p>
-              )}
-              {artists.map((a, i) => (
-                <ArtistRow
-                  key={a.artist_id}
-                  rank={i + 1}
-                  artist={a}
-                  metric={`${Number(a.stream_count).toLocaleString()} streams`}
-                  index={i}
-                />
-              ))}
-            </div>
-          </Section>
+            <Section eyebrow="Ranked" title="Top Artists">
+              <div className="flex flex-col gap-0.5">
+                {artists.length === 0 && (
+                  <p className="text-mist text-sm py-6 text-center">{copy.emptyLabel}</p>
+                )}
+                {artists.map((a, i) => (
+                  <ArtistRow
+                    key={a.artist_id}
+                    rank={i + 1}
+                    artist={a}
+                    metric={`${Number(a.stream_count).toLocaleString()} streams`}
+                    index={i}
+                  />
+                ))}
+              </div>
+            </Section>
+          </div>
         </div>
       )}
     </div>

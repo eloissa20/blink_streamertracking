@@ -8,10 +8,14 @@ use App\Http\Controllers\StatsFmController;
 use Illuminate\Support\Facades\Route;
 
 // --- Public: landing page dashboard, no login required ---------------------
+// Every route below expects ?platform=spotify|apple_music so the public
+// tab switcher (Spotify/statsfm vs Apple Music/musicat) always reads a
+// single platform's data — see PublicDashboardController.
 Route::prefix('public')->group(function () {
     Route::get('/overview', [PublicDashboardController::class, 'overview']);
     Route::get('/top-tracks', [PublicDashboardController::class, 'topTracks']);
     Route::get('/top-artists', [PublicDashboardController::class, 'topArtists']);
+    Route::get('/recently-played', [PublicDashboardController::class, 'recentlyPlayed']);
 });
 
 // --- Auth --------------------------------------------------------------

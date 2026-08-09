@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
 
   const load = useCallback(async (win) => {
     setLoading(true);
@@ -62,10 +63,42 @@ export default function Dashboard() {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncError(null);
+
+    // Sync whichever sources are connected. allSettled (not all) on
+    // purpose: one source failing shouldn't stop the other from syncing
+    // or from us reloading whatever did succeed — but unlike before, a
+    // real failure here is no longer swallowed silently. A 404 just means
+    // that particular service isn't linked at all, which is expected and
+    // not worth surfacing as an error; anything else (502 from the
+    // backend when it couldn't reach the source, a network error, etc.)
+    // gets shown so "Sync now" finishing doesn't quietly look successful
+    // when a source's "Last synced" time didn't actually move.
+    const [sf, mc] = await Promise.allSettled([
+      api.post('/statsfm/sync'),
+      api.post('/musicat/sync'),
+    ]);
+
+    const failed = [];
+    if (sf.status === 'rejected' && sf.reason?.response?.status !== 404) {
+      failed.push('Spotify');
+    }
+    if (mc.status === 'rejected' && mc.reason?.response?.status !== 404) {
+      failed.push('Apple Music');
+    }
+    if (failed.length) {
+      const detail =
+        mc.status === 'rejected' && mc.reason?.response?.data?.message
+          ? mc.reason.response.data.message
+          : sf.status === 'rejected' && sf.reason?.response?.data?.message
+          ? sf.reason.response.data.message
+          : null;
+      setSyncError(
+        `Couldn't sync ${failed.join(' and ')} — try again in a bit.${detail ? ` (${detail})` : ''}`
+      );
+    }
+
     try {
-      // Sync whichever sources are connected; a 404 just means that
-      // particular service isn't linked, which is fine.
-      await Promise.allSettled([api.post('/statsfm/sync'), api.post('/musicat/sync')]);
       await load(window_);
     } finally {
       setSyncing(false);
@@ -88,15 +121,20 @@ export default function Dashboard() {
           </h1>
           <HeaderClock lastSyncedAt={lastSyncedAt} />
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <TimeFilter value={window_} onChange={setWindow} />
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="text-sm px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-colors disabled:opacity-50 whitespace-nowrap"
-          >
-            {syncing ? 'Syncing…' : 'Sync now'}
-          </button>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <TimeFilter value={window_} onChange={setWindow} />
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="text-sm px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          </div>
+          {syncError && (
+            <p className="text-xs text-red-400 max-w-xs text-right">{syncError}</p>
+          )}
         </div>
       </motion.div>
 

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\StatsFmConnection;
 use App\Support\AllowedArtists;
+use App\Support\Exceptions\SourceUnavailableException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -71,7 +72,15 @@ class StatsFmService
                 'statsfm_user_id' => $statsfmUserId,
                 'status' => $response->status(),
             ]);
-            return [];
+
+            // Thrown rather than returning [] so PlayRecordSyncer can tell
+            // "the API call itself failed" apart from "it succeeded and
+            // there's genuinely nothing new" — see SourceUnavailableException
+            // and the matching fix on the Musicat side for why that
+            // distinction matters for last_synced_at.
+            throw new SourceUnavailableException(
+                "Stats.fm recentlyPlayed failed for user '{$statsfmUserId}' with status {$response->status()}."
+            );
         }
 
         return $response->json('items', []);
