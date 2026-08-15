@@ -28,7 +28,12 @@ class MusicatPlayRecordSyncer
 
     public function sync(MusicatConnection $connection): int
     {
-        $items = $this->musicat->recentlyPlayed($connection->musicat_user_id);
+        // musicat_user_id is the account's internal id when available
+        // (preferred — targets the full History page) or the legacy
+        // handle for older connections; musicat_username is always the
+        // public handle, needed as a fallback in the first case and
+        // directly in the second. See MusicatService::recentlyPlayed().
+        $items = $this->musicat->recentlyPlayed($connection->musicat_user_id, $connection->musicat_username);
         $inserted = 0;
 
         // Recently-played rows never show a photo, but the profile's "Top
@@ -43,8 +48,11 @@ class MusicatPlayRecordSyncer
         // "LiSA" in one row, "LISA" in the other). An exact-string lookup
         // silently misses in that case and the play keeps a null image
         // forever, since nothing re-checks it after the fact.
+        // Always the public handle — the "Top artists" photos live on the
+        // profile page (musicat.fm/<handle>), not the History page, so
+        // this can't use musicat_user_id when that's the internal UUID.
         $artistImages = [];
-        foreach ($this->musicat->artistImageMap($connection->musicat_user_id) as $name => $url) {
+        foreach ($this->musicat->artistImageMap($connection->musicat_username) as $name => $url) {
             // mb_strtoupper(), not strtoupper() — see AllowedArtists::canonicalize()
             // for why the plain (non-multibyte) version silently fails to
             // fold accented names like "Rosé" the same way on both sides

@@ -96,6 +96,37 @@ class MusicatService
      * panel before reading out the final HTML. That way a row only has to
      * be mounted for one round, at any point during scrolling, to survive
      * into what we return — eviction afterwards no longer loses it.
+     *
+     * A SECOND bug hid behind that first fix and produced the exact same
+     * symptom (a chunk of history missing from the middle of the
+     * timeline): each round set `el.scrollTop = el.scrollHeight`, which
+     * jumps the panel from wherever it is straight to the absolute
+     * bottom in one step. A virtualized panel only ever mounts rows for
+     * whatever scroll position it's *currently* at — jumping straight
+     * from top to bottom means every position in between (i.e. most of
+     * the list) is never actually visited, so those rows never mount at
+     * all and snapshotRows() never sees them, no matter how many rounds
+     * run. Only the top-of-list rows (captured before the first scroll)
+     * and the bottom-of-list rows (captured after the jump) ever made it
+     * into the accumulated set — everything else fell straight through.
+     * The stop condition compounded this: it summed scrollHeight across
+     * the whole page, but a virtualized list's scroll container commonly
+     * has a fixed "sizer" height computed once from the total item count
+     * rather than from how much has actually been rendered, so that sum
+     * doesn't change between rounds — the loop concluded "nothing is
+     * growing anymore" and bailed out almost immediately, often before
+     * even the bottom-of-list jump's rows had time to mount and be
+     * snapshotted.
+     *
+     * Fixed by advancing each panel's scrollTop incrementally (roughly
+     * one viewport's worth per round, capped at the panel's max) instead
+     * of jumping straight to the end, so every intermediate scroll
+     * position — and therefore every row that ever mounts along the way
+     * — gets a chance to be snapshotted. The stop condition now tracks
+     * each panel's own scrollTop reaching its own max, requiring several
+     * consecutive rounds with no panel able to move further (rather than
+     * a single potentially-misleading page-height reading) before
+     * concluding the whole list has actually been walked.
      */
     private function renderProfileHtml(string $handle): ?string
     {
@@ -105,7 +136,12 @@ class MusicatService
                 ->waitUntilDOMContentLoaded()
                 ->windowSize(1280, 2000)
                 ->setDelay($this->renderDelayMs)
-                ->timeout(90);
+                // The incremental scroll-and-snapshot loop below can now
+                // run up to 150 rounds (~75s worst case) to walk a long
+                // history one viewport-step at a time — bumped up from 90s
+                // so a large backlog doesn't get cut off mid-scroll by the
+                // page-render timeout itself.
+                ->timeout(150);
 
             if ($this->chromePath) {
                 $shot->setChromePath($this->chromePath);
@@ -163,45 +199,74 @@ class MusicatService
                         }
                     };
 
-                    let lastTotalHeight = 0;
+                    // A panel counts as "at its floor" once it can't be
+                    // scrolled any further — small fudge factor for
+                    // sub-pixel layout rounding.
+                    const atBottom = (el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
 
-                    for (let round = 0; round < 40; round++) {
+                    // Require several consecutive rounds where NOTHING
+                    // moved (every panel already at its own bottom, and
+                    // the window fallback already maxed) before
+                    // concluding the whole list has genuinely been
+                    // walked. A single quiet round isn't enough proof —
+                    // e.g. a panel that only just reached bottom still
+                    // needs one more round for its final rows to mount
+                    // and get snapshotted.
+                    const REQUIRED_STABLE_ROUNDS = 3;
+                    let stableRounds = 0;
+
+                    for (let round = 0; round < 150; round++) {
                         // Snapshot BEFORE scrolling further, so this
                         // round's currently-mounted rows are captured
                         // before anything has a chance to be evicted.
                         snapshotRows();
 
                         const scrollables = findScrollables();
+                        let movedThisRound = false;
 
                         if (scrollables.length === 0) {
                             // No internal panel found (yet, or this page
                             // genuinely doesn't have one) — fall back to
                             // scrolling the window itself as a safety net.
+                            const before = window.scrollY;
                             window.scrollTo(0, document.body.scrollHeight);
+                            if (window.scrollY !== before) movedThisRound = true;
                         } else {
                             for (const el of scrollables) {
-                                el.scrollTop = el.scrollHeight;
+                                if (atBottom(el)) continue;
+
+                                // Advance roughly one viewport's worth per
+                                // round rather than jumping straight to the
+                                // very bottom — a virtualized panel only
+                                // mounts rows for whatever position it's
+                                // AT, so every intermediate stop needs to
+                                // actually happen for its rows to ever be
+                                // seen. Capped at the panel's own max so
+                                // this never overshoots past the bottom.
+                                const step = Math.max(el.clientHeight * 0.8, 100);
+                                el.scrollTop = Math.min(el.scrollTop + step, el.scrollHeight);
                                 // Some lazy-load implementations listen for
                                 // a real scroll event rather than polling
                                 // scrollTop, so dispatch one explicitly.
                                 el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                                movedThisRound = true;
                             }
                         }
 
-                        await new Promise((resolve) => setTimeout(resolve, 600));
+                        await new Promise((resolve) => setTimeout(resolve, 500));
 
-                        // Stop once nothing on the page is growing anymore
-                        // (every panel has loaded everything it has).
-                        const totalHeight = Array.from(document.querySelectorAll('*'))
-                            .reduce((sum, el) => sum + el.scrollHeight, 0);
+                        if (movedThisRound) {
+                            stableRounds = 0;
+                            continue;
+                        }
 
-                        if (totalHeight === lastTotalHeight) {
+                        stableRounds++;
+                        if (stableRounds >= REQUIRED_STABLE_ROUNDS) {
                             // One last catch-up snapshot of wherever
                             // scrolling finally settled, then stop.
                             snapshotRows();
                             break;
                         }
-                        lastTotalHeight = totalHeight;
                     }
 
                     // Replace each virtualized panel's rows with every row
@@ -219,6 +284,239 @@ class MusicatService
         } catch (\Throwable $e) {
             Log::warning('Musicat profile render failed', [
                 'handle' => $handle,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * True for a Musicat internal platform id (a UUID, as seen in
+     * musicat.fm/users/<uuid>/history links) as opposed to a public handle
+     * (e.g. "shamara"). Used to decide whether recentlyPlayed() can target
+     * the dedicated History page (see renderHistoryHtml()) or has to fall
+     * back to scraping the profile page's small "Recently played" panel —
+     * connections created before this id started being captured only have
+     * the handle on file, so both paths need to keep working.
+     */
+    private function isMusicatUuid(string $value): bool
+    {
+        return (bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', trim($value));
+    }
+
+    /**
+     * href attributes of every <a> tag in the page, in document order.
+     * Only used to pull the internal user id out of the profile page's own
+     * link to its "History" tab (see findUserByHandle()) — everything else
+     * in this class deliberately sticks to visible text, but that id isn't
+     * rendered as text anywhere, only embedded in that one link's URL.
+     */
+    private function anchorHrefs(Crawler $crawler): array
+    {
+        return $crawler->filterXPath('//a[@href]')->each(fn (Crawler $a) => $a->attr('href'));
+    }
+
+    /**
+     * Render the dedicated Musicat "History" page
+     * (musicat.fm/users/<uuid>/history) and return its body HTML.
+     *
+     * This is a DIFFERENT page from the profile (musicat.fm/<handle>) that
+     * renderProfileHtml() reads — confirmed by inspecting the app's own
+     * navigation: the profile page has a small "Recently played" panel
+     * that's an internally-virtualizing preview, while a separate
+     * "History" tab/page lists a given day's plays in full, with a day
+     * selector across the current (and, on paid plans, older) dates. This
+     * is the actual complete record — it's what Musicat's own per-day play
+     * count on that page reflects — and scraping it directly, rather than
+     * fighting the profile panel's virtualization, is what actually closes
+     * the "only 3 songs" gap end to end.
+     *
+     * Row detection here does NOT reuse renderProfileHtml()'s "sizer div /
+     * rowContainer" approach, because that assumes rows live inside one
+     * particular internally-scrolling wrapper — true for the profile
+     * panel, but not verified for this page, which may render its list in
+     * normal page flow instead (no distinct inner scrollbar was visible in
+     * the observed screenshot). Instead, rows are found directly by
+     * content: any leaf element whose text matches the same "<Source> •
+     * <date> <time>" pattern used for final parsing is treated as a row's
+     * metadata line, and a fixed number of ancestor levels are walked up
+     * to capture that row's wrapper (thumbnail + track/artist text sitting
+     * alongside it). This works whether the list turns out to be
+     * virtualized inside a panel (the incremental scroll below gives each
+     * position a chance to mount and be snapshotted, same fix as the
+     * profile panel) or already fully present in the DOM (the very first,
+     * pre-scroll snapshot already captures everything and the scroll loop
+     * below is then just a harmless no-op).
+     *
+     * Also makes a best-effort attempt to click through any other visible
+     * day-selector tabs (stepping backward from today) so a gap spanning
+     * more than one calendar day still gets fully covered, not just
+     * today's plays. This part is deliberately conservative: Musicat's
+     * exact tab markup hasn't been inspected directly, only inferred from
+     * a screenshot, so it's wrapped so that if the tab-clicking guess is
+     * wrong (or those days are paywalled on a free plan), it simply stops
+     * and keeps whatever today's data already captured rather than
+     * corrupting or blanking out the scrape.
+     */
+    private function renderHistoryHtml(string $historyUserId): ?string
+    {
+        try {
+            $shot = Browsershot::url("{$this->profileBaseUrl}/users/{$historyUserId}/history")
+                ->noSandbox()
+                ->waitUntilDOMContentLoaded()
+                ->windowSize(1280, 2000)
+                ->setDelay($this->renderDelayMs)
+                ->timeout(150);
+
+            if ($this->chromePath) {
+                $shot->setChromePath($this->chromePath);
+            }
+
+            return $shot->evaluate(<<<'JS'
+                (async () => {
+                    const ROW_META_RE = /(Apple Music|Spotify)[^\d]{1,8}\d{2}\.\d{2}\.\d{2}\s+\d{1,2}:\d{2}\s*[AP]M/i;
+
+                    const findScrollables = () => Array.from(document.querySelectorAll('*'))
+                        .filter((el) => {
+                            const style = getComputedStyle(el);
+                            const scrollsY = style.overflowY === 'auto' || style.overflowY === 'scroll';
+                            return scrollsY && el.scrollHeight > el.clientHeight + 20;
+                        });
+
+                    // Find each row by its own content rather than by a
+                    // structural guess about a shared wrapper — see the
+                    // docblock above for why. Walk up a handful of
+                    // ancestor levels from the metadata-line element until
+                    // hitting something wider than a single text node,
+                    // which should be the row's own container (artwork +
+                    // text block together).
+                    const findRowElements = () => Array.from(document.querySelectorAll('*'))
+                        .filter((el) => el.children.length === 0 && ROW_META_RE.test(el.textContent || ''))
+                        .map((metaEl) => {
+                            let row = metaEl;
+                            for (let i = 0; i < 6 && row.parentElement; i++) {
+                                row = row.parentElement;
+                                if (row.children.length >= 2) break;
+                            }
+                            return row;
+                        });
+
+                    // textContent -> outerHTML, de-duplicated, first-seen
+                    // order preserved, so a row only needs to be mounted
+                    // for one snapshot (at any scroll position, on any day
+                    // visited) to survive into the final result.
+                    const seenRows = new Map();
+
+                    const snapshotRows = () => {
+                        for (const row of findRowElements()) {
+                            const key = row.textContent.trim();
+                            if (key && !seenRows.has(key)) {
+                                seenRows.set(key, row.outerHTML);
+                            }
+                        }
+                    };
+
+                    const atBottom = (el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+
+                    // Incrementally scroll (whatever panel or the window
+                    // itself) and snapshot at every step until nothing
+                    // moves for a few consecutive rounds — same fix as
+                    // renderProfileHtml(): jumping straight to the bottom
+                    // in one step would skip every row that only ever
+                    // mounts at an intermediate scroll position.
+                    const walkAndSnapshot = async () => {
+                        const REQUIRED_STABLE_ROUNDS = 3;
+                        let stableRounds = 0;
+
+                        for (let round = 0; round < 80; round++) {
+                            snapshotRows();
+
+                            const scrollables = findScrollables();
+                            let movedThisRound = false;
+
+                            if (scrollables.length === 0) {
+                                const before = window.scrollY;
+                                const target = Math.min(window.scrollY + window.innerHeight * 0.8, document.body.scrollHeight);
+                                window.scrollTo(0, target);
+                                if (window.scrollY !== before) movedThisRound = true;
+                            } else {
+                                for (const el of scrollables) {
+                                    if (atBottom(el)) continue;
+                                    const step = Math.max(el.clientHeight * 0.8, 100);
+                                    el.scrollTop = Math.min(el.scrollTop + step, el.scrollHeight);
+                                    el.dispatchEvent(new Event('scroll', { bubbles: true }));
+                                    movedThisRound = true;
+                                }
+                            }
+
+                            await new Promise((resolve) => setTimeout(resolve, 500));
+
+                            if (movedThisRound) {
+                                stableRounds = 0;
+                                continue;
+                            }
+
+                            stableRounds++;
+                            if (stableRounds >= REQUIRED_STABLE_ROUNDS) {
+                                snapshotRows();
+                                break;
+                            }
+                        }
+                    };
+
+                    // Today's tab is selected by default on page load —
+                    // walk and snapshot it first.
+                    await walkAndSnapshot();
+
+                    // Best-effort: also walk backward through any other
+                    // day tabs so a gap spanning more than one calendar
+                    // day still gets covered. See docblock — deliberately
+                    // defensive, degrades to "just today's data" on any
+                    // mismatch with the real markup.
+                    try {
+                        const dayTabs = Array.from(document.querySelectorAll('button, [role="button"], a'))
+                            .filter((el) => /^(sun|mon|tue|wed|thu|fri|sat)\s+\d{1,2}$/i.test((el.textContent || '').trim()));
+
+                        // Reading order is oldest-to-newest (matching the
+                        // screenshot); walk newest-to-oldest, skipping
+                        // today's (already captured) tab.
+                        const orderedTabs = dayTabs.slice().reverse();
+
+                        for (const tab of orderedTabs) {
+                            const before = seenRows.size;
+
+                            tab.click();
+                            await new Promise((resolve) => setTimeout(resolve, 700));
+                            await walkAndSnapshot();
+
+                            if (seenRows.size === before) {
+                                // Nothing new showed up for this day —
+                                // genuinely empty, locked behind a paid
+                                // plan, or this wasn't really a day tab.
+                                // Stop rather than keep clicking blind.
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        // Swallow — today's data above is still valid.
+                    }
+
+                    // Splice every row ever seen, across every day
+                    // visited, into one flat container so the PHP-side
+                    // parser (which just scans text nodes in order) sees
+                    // the complete set regardless of which page/day each
+                    // row actually came from.
+                    const combined = document.createElement('div');
+                    combined.innerHTML = Array.from(seenRows.values()).join('');
+                    document.body.innerHTML = '';
+                    document.body.appendChild(combined);
+
+                    return document.body.innerHTML;
+                })()
+            JS);
+        } catch (\Throwable $e) {
+            Log::warning('Musicat history render failed', [
+                'historyUserId' => $historyUserId,
                 'error' => $e->getMessage(),
             ]);
             return null;
@@ -427,11 +725,28 @@ class MusicatService
         $displayName = $atHandleIndex > 0 ? $lines[$atHandleIndex - 1] : null;
         $handleFromPage = ltrim($lines[$atHandleIndex], '@');
 
+        // The profile page links to this same account's "History" tab
+        // (musicat.fm/users/<uuid>/history) — that link is the only place
+        // the account's real internal id shows up anywhere; it's never
+        // rendered as visible text. Capturing it here lets recentlyPlayed()
+        // target the full History page instead of the profile's small
+        // "Recently played" panel. Not fatal if it's missing (e.g. a
+        // profile page layout that doesn't expose that link) — recentlyPlayed()
+        // falls back to the old profile-panel scrape in that case.
+        $historyUserId = null;
+        foreach ($this->anchorHrefs($crawler) as $href) {
+            if ($href && preg_match('#/users/([0-9a-f-]{20,40})(?:/|$)#i', $href, $m)) {
+                $historyUserId = $m[1];
+                break;
+            }
+        }
+
         return [
             'id' => $handleFromPage,
             'username' => $handleFromPage,
             'displayName' => $displayName,
             'avatarUrl' => null, // not reliably extractable from text nodes
+            'historyUserId' => $historyUserId,
         ];
     }
 
@@ -448,15 +763,29 @@ class MusicatService
      * whichever image immediately preceded the track name as its artwork.
      *
      * $limit is a safety ceiling on parsing/storage cost, not a
-     * "how far back Musicat lets us look" cap — renderProfileHtml() now
-     * accumulates every row seen across the whole scroll (see its
-     * docblock), so raising this simply gives MusicatPlayRecordSyncer more
-     * room to fill in a large gap (e.g. after a missed sync run) in one
-     * pass, rather than only ever returning the newest handful.
+     * "how far back Musicat lets us look" cap — the underlying render
+     * accumulates every row seen across the whole scroll (and, on the
+     * History page, across every day tab walked — see renderHistoryHtml()),
+     * so raising this simply gives MusicatPlayRecordSyncer more room to
+     * fill in a large gap (e.g. after a missed sync run) in one pass,
+     * rather than only ever returning the newest handful.
+     *
+     * $musicatUserId should be the account's internal Musicat id (a UUID,
+     * as captured by findUserByHandle()'s 'historyUserId') — when it looks
+     * like one, this targets the dedicated History page directly, which is
+     * the complete record and isn't limited to whatever fits in the
+     * profile's small "Recently played" panel (see renderHistoryHtml()'s
+     * docblock for why that panel alone can't be made to yield everything,
+     * even with the scroll-accumulation fix applied to it). $handle (the
+     * public profile handle, e.g. "shamara") is required in that case to
+     * fall back to the old profile-panel scrape for connections made
+     * before the history id started being captured.
      */
-    public function recentlyPlayed(string $handle, int $limit = 300): array
+    public function recentlyPlayed(string $musicatUserId, ?string $handle = null, int $limit = 300): array
     {
-        $html = $this->renderProfileHtml($handle);
+        $html = $this->isMusicatUuid($musicatUserId)
+            ? $this->renderHistoryHtml($musicatUserId)
+            : $this->renderProfileHtml($handle ?? $musicatUserId);
 
         if (! $html) {
             return [];

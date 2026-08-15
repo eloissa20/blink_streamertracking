@@ -63,7 +63,15 @@ class MusicatController extends Controller
             ], 404);
         }
 
-        $musicatUserId = $profile['id'] ?? $profile['userId'] ?? $request->musicat_handle;
+        // Prefer the account's real internal Musicat id (a UUID, scraped
+        // off the profile page's own link to its History tab) over the
+        // public handle — it's what lets recentlyPlayed() target the full
+        // History page instead of the profile's small "Recently played"
+        // panel. Falls back to the handle if that link wasn't found on
+        // this profile's page for any reason; recentlyPlayed() already
+        // knows how to fall back to the old panel scrape when it gets a
+        // non-UUID id.
+        $musicatUserId = $profile['historyUserId'] ?? $profile['id'] ?? $profile['userId'] ?? $request->musicat_handle;
 
         $existing = MusicatConnection::where('musicat_user_id', $musicatUserId)->first();
         if ($existing) {

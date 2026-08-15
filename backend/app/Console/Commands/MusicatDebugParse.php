@@ -13,29 +13,38 @@ use Symfony\Component\DomCrawler\Crawler;
  * i-2 offset (artist / track name) is actually landing on the right lines
  * for every row — e.g. rows whose artwork has an extra badge/label
  * (like JISOO's "AMORTAGE" tracks) that might inject an extra text node
- * and shift everything.
+ * and shift everything. Also useful for confirming the row COUNT is
+ * complete (no gap in the middle of the timeline) after a sync.
  *
  * Usage: php artisan musicat:debug-parse <handle>
- * (the part after musicat.fm/ in the profile URL)
+ * (the part after musicat.fm/ in the profile URL — scrapes the profile
+ * page's small "Recently played" panel)
+ *
+ * Usage: php artisan musicat:debug-parse <uuid> --history
+ * (the account's internal id, from musicat_connections.musicat_user_id —
+ * scrapes the full History page instead, which is what an actual sync now
+ * uses whenever that id is available; this is the one to run to verify a
+ * previously-reported gap is actually closed)
  */
 class MusicatDebugParse extends Command
 {
-    protected $signature = 'musicat:debug-parse {handle} {--around=6 : lines of context to show before each matched row}';
-    protected $description = 'Dump raw Musicat profile text-node order around each recently-played row, for debugging parse misalignment';
+    protected $signature = 'musicat:debug-parse {handle} {--around=6 : lines of context to show before each matched row} {--history : treat the given argument as an internal Musicat user id (uuid) and scrape the History page instead of the profile panel}';
+    protected $description = 'Dump raw Musicat profile/history text-node order around each recently-played row, for debugging parse misalignment or missing rows';
 
     public function handle(MusicatService $musicat): int
     {
         $handle = $this->argument('handle');
         $context = (int) $this->option('around');
+        $useHistory = (bool) $this->option('history');
 
         $reflection = new \ReflectionClass($musicat);
 
-        $renderMethod = $reflection->getMethod('renderProfileHtml');
+        $renderMethod = $reflection->getMethod($useHistory ? 'renderHistoryHtml' : 'renderProfileHtml');
         $renderMethod->setAccessible(true);
         $html = $renderMethod->invoke($musicat, $handle);
 
         if (! $html) {
-            $this->error('Could not render the profile page — check MUSICAT_CHROME_PATH / network access / that the profile is public.');
+            $this->error('Could not render the page — check MUSICAT_CHROME_PATH / network access / that the profile is public / that the id or handle is correct.');
             return self::FAILURE;
         }
 
