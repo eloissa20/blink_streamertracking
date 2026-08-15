@@ -88,6 +88,34 @@ class PlayRecord extends Model
     }
 
     /**
+     * Isolates one Spotify (Stats.fm) connection's plays from every other
+     * Spotify connection the same user has linked, now that a user can
+     * have 5+ of them — without this, PersonalStatsController's queries
+     * (which only ever filter by user_id) would silently merge every
+     * connected Spotify account's history into one combined Top
+     * Tracks/Top Artists/Recently Played, which is exactly the "stats
+     * must never mix between accounts" bug this exists to prevent.
+     *
+     * $connectionId is null when the caller didn't ask to scope at all
+     * (kept as a no-op in that case rather than excluding everything).
+     * Apple Music (Musicat) rows are untouched either way — they carry no
+     * statsfm_connection_id and remain governed solely by
+     * scopeMatchingConnectedSource() above, since Apple Music is still a
+     * single connection per user and was never part of this ambiguity.
+     */
+    public function scopeForStatsFmConnection(Builder $query, ?int $connectionId): Builder
+    {
+        if ($connectionId === null) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($connectionId) {
+            $q->where('statsfm_connection_id', $connectionId)
+                ->orWhereNull('statsfm_connection_id');
+        });
+    }
+
+    /**
      * A connection tracks exactly one service. This is a read-time safety
      * net alongside the same check already applied when a play is synced
      * in — so even a play left over from before a user switched services

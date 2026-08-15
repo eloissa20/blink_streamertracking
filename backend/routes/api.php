@@ -31,11 +31,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
 
-    // --- Stats.fm account connection — Spotify only, one per user -------
-    Route::get('/statsfm/connection', [StatsFmController::class, 'show']);
+    // --- Stats.fm account connections — Spotify only, up to several per
+    // user (see config/connections.php for the cap). Each connection is
+    // its own isolated Recently Played / Top Tracks / Top Artists —
+    // never combined with another connection's data.
+    Route::get('/statsfm/connections', [StatsFmController::class, 'index']);
     Route::post('/statsfm/connect', [StatsFmController::class, 'connect']);
-    Route::delete('/statsfm/connection', [StatsFmController::class, 'disconnect']);
-    Route::post('/statsfm/sync', [StatsFmController::class, 'sync']);
+    Route::post('/statsfm/connect/bulk', [StatsFmController::class, 'bulkConnect']);
+    Route::delete('/statsfm/connections/{connection}', [StatsFmController::class, 'disconnect']);
+    Route::post('/statsfm/connections/{connection}/sync', [StatsFmController::class, 'sync']);
+    Route::post('/statsfm/sync', [StatsFmController::class, 'syncAll']);
 
     // --- Musicat account connection — exclusive Apple Music source ------
     Route::get('/musicat/connection', [MusicatController::class, 'show']);

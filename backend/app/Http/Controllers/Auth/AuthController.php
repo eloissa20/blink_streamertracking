@@ -314,6 +314,7 @@ class AuthController extends Controller
             'user' => $request->user(),
             'has_connected_statsfm' => $request->user()->hasConnectedStatsFm(),
             'has_connected_musicat' => $request->user()->hasConnectedMusicat(),
+            'statsfm_connections_count' => $request->user()->statsFmConnections()->count(),
         ]);
     }
 }

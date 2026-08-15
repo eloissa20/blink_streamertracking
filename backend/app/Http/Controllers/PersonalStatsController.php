@@ -21,16 +21,55 @@ class PersonalStatsController extends Controller
         ]);
     }
 
+    /**
+     * Which Spotify (Stats.fm) connection's plays these stats should be
+     * scoped to. A user can have several connected at once now, and their
+     * stats must never mix — so every one of the endpoints below resolves
+     * this the same way and passes it straight into
+     * PlayRecord::scopeForStatsFmConnection():
+     *
+     *   - `statsfm_connection_id` query param, if given, is used as-is
+     *     (after confirming it actually belongs to this user — otherwise
+     *     a stale id from an old tab could leak another linked account's
+     *     numbers into this one's stats, or 404 rather than silently
+     *     falling back).
+     *   - Otherwise, fall back to the user's default connection
+     *     (earliest-connected) — this is what keeps a single-account
+     *     user's dashboard behaving exactly as it did before this
+     *     feature existed, with zero client changes required.
+     *   - A user with zero Spotify connections gets null back, which
+     *     scopeForStatsFmConnection() treats as "don't restrict" — there
+     *     is nothing to disambiguate between, and Apple Music/Musicat
+     *     stats (which aren't affected by any of this) still need to come
+     *     through.
+     */
+    private function resolveStatsFmConnectionId(Request $request): ?int
+    {
+        $requested = $request->query('statsfm_connection_id');
+
+        if ($requested !== null) {
+            $owned = $request->user()->statsFmConnections()->whereKey($requested)->exists();
+
+            abort_unless($owned, 404, 'No such connected Spotify account.');
+
+            return (int) $requested;
+        }
+
+        return $request->user()->defaultStatsFmConnection()?->id;
+    }
+
     public function topTracks(Request $request)
     {
         $this->validateWindow($request);
         $userId = $request->user()->id;
         $window = $this->window($request);
+        $connectionId = $this->resolveStatsFmConnectionId($request);
 
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
             ->matchingConnectedSource()
+            ->forStatsFmConnection($connectionId)
             ->inWindow($window)
             ->selectRaw('track_id, track_name, artist_name, album_name, artwork_url, source,
                 COUNT(*) as play_count, SUM(duration_ms) as total_ms')
@@ -50,7 +89,7 @@ class PersonalStatsController extends Controller
                 'total_time_formatted' => Duration::humanize((int) $row->total_ms),
             ]);
 
-        return response()->json(['window' => $window, 'tracks' => $rows]);
+        return response()->json(['window' => $window, 'statsfm_connection_id' => $connectionId, 'tracks' => $rows]);
     }
 
     public function topArtists(Request $request)
@@ -58,11 +97,13 @@ class PersonalStatsController extends Controller
         $this->validateWindow($request);
         $userId = $request->user()->id;
         $window = $this->window($request);
+        $connectionId = $this->resolveStatsFmConnectionId($request);
 
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
             ->matchingConnectedSource()
+            ->forStatsFmConnection($connectionId)
             ->inWindow($window)
             ->selectRaw('artist_id, artist_name, MAX(artist_image_url) as artist_image_url,
                 COUNT(*) as play_count, SUM(duration_ms) as total_ms,
@@ -81,12 +122,13 @@ class PersonalStatsController extends Controller
                 'total_time_formatted' => Duration::humanize((int) $row->total_ms),
             ]);
 
-        return response()->json(['window' => $window, 'artists' => $rows]);
+        return response()->json(['window' => $window, 'statsfm_connection_id' => $connectionId, 'artists' => $rows]);
     }
 
     public function recentlyPlayed(Request $request)
     {
         $userId = $request->user()->id;
+        $connectionId = $this->resolveStatsFmConnectionId($request);
 
         // Deliberately no ->allowedArtists() here: the counted stats
         // (topTracks/topArtists above) stay BLACKPINK+members-only, but
@@ -96,6 +138,7 @@ class PersonalStatsController extends Controller
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->matchingConnectedSource()
+            ->forStatsFmConnection($connectionId)
             ->orderByDesc('played_at')
             ->limit(100)
             ->get()
@@ -110,7 +153,7 @@ class PersonalStatsController extends Controller
                 'played_at' => $row->played_at->toIso8601String(),
             ]);
 
-        return response()->json(['recently_played' => $rows]);
+        return response()->json(['statsfm_connection_id' => $connectionId, 'recently_played' => $rows]);
     }
 
     /**
@@ -121,12 +164,14 @@ class PersonalStatsController extends Controller
     public function dailyActivity(Request $request)
     {
         $userId = $request->user()->id;
+        $connectionId = $this->resolveStatsFmConnectionId($request);
         $start = now()->subDays(29)->startOfDay();
 
         $rows = PlayRecord::query()
             ->where('user_id', $userId)
             ->allowedArtists()
             ->matchingConnectedSource()
+            ->forStatsFmConnection($connectionId)
             ->where('played_at', '>=', $start)
             ->selectRaw('DATE(played_at) as day, source, COUNT(*) as play_count')
             ->groupBy('day', 'source')
@@ -146,6 +191,6 @@ class PersonalStatsController extends Controller
             $days[$row->day][$key] = (int) $row->play_count;
         }
 
-        return response()->json(['days' => array_values($days)]);
+        return response()->json(['statsfm_connection_id' => $connectionId, 'days' => array_values($days)]);
     }
 }

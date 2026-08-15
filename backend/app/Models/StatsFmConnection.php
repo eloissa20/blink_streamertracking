@@ -22,6 +22,7 @@ class StatsFmConnection extends Model
         'statsfm_username',
         'display_name',
         'avatar_url',
+        'label',
         'connected_source',
         'include_in_public_overview',
         'connected_at',

@@ -9,6 +9,14 @@ import RecentlyPlayedTable from '../components/RecentlyPlayedTable';
 import ActivityChart from '../components/ActivityChart';
 import HeaderClock from '../components/HeaderClock';
 import Waveform from '../components/Waveform';
+import SpotifyAccountSwitcher from '../components/SpotifyAccountSwitcher';
+
+// Remembers which of the user's Spotify accounts was last active across a
+// page reload. Purely a UI convenience — the backend still defaults to the
+// same (earliest-connected) account on its own if this is ever missing or
+// stale, so losing this value never breaks anything, it just resets which
+// account shows first.
+const ACTIVE_CONNECTION_KEY = 'active_statsfm_connection_id';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -22,35 +30,69 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState(null);
 
-  const load = useCallback(async (win) => {
-    setLoading(true);
-    const [tr, ar, rp, da, sfConn, mcConn] = await Promise.all([
-      api.get('/me/top-tracks', { params: { window: win } }),
-      api.get('/me/top-artists', { params: { window: win } }),
-      api.get('/me/recently-played'),
-      api.get('/me/daily-activity'),
-      api.get('/statsfm/connection'),
-      api.get('/musicat/connection'),
-    ]);
-    setTracks(tr.data.tracks);
-    setArtists(ar.data.artists);
-    setRecent(rp.data.recently_played);
-    setDailyActivity(da.data.days);
+  // --- Multiple connected Spotify accounts -----------------------------
+  const [spotifyConnections, setSpotifyConnections] = useState([]);
+  const [activeConnectionId, setActiveConnectionId] = useState(() => {
+    const stored = Number(localStorage.getItem(ACTIVE_CONNECTION_KEY));
+    return Number.isFinite(stored) && stored > 0 ? stored : null;
+  });
 
-    // Show whichever connected source synced most recently.
-    const timestamps = [
-      sfConn.data.connection?.last_synced_at,
-      mcConn.data.connection?.last_synced_at,
-    ].filter(Boolean);
-    setLastSyncedAt(
-      timestamps.length ? timestamps.sort().at(-1) : null
-    );
-    setLoading(false);
-  }, []);
+  const handleSwitchAccount = (id) => {
+    setActiveConnectionId(id);
+    localStorage.setItem(ACTIVE_CONNECTION_KEY, String(id));
+  };
+
+  const load = useCallback(
+    async (win, connectionId) => {
+      setLoading(true);
+      const statsParams = { window: win };
+      if (connectionId) statsParams.statsfm_connection_id = connectionId;
+      const recentParams = connectionId ? { statsfm_connection_id: connectionId } : {};
+
+      const [tr, ar, rp, da, sf, mcConn] = await Promise.all([
+        api.get('/me/top-tracks', { params: statsParams }),
+        api.get('/me/top-artists', { params: statsParams }),
+        api.get('/me/recently-played', { params: recentParams }),
+        api.get('/me/daily-activity', { params: recentParams }),
+        api.get('/statsfm/connections'),
+        api.get('/musicat/connection'),
+      ]);
+      setTracks(tr.data.tracks);
+      setArtists(ar.data.artists);
+      setRecent(rp.data.recently_played);
+      setDailyActivity(da.data.days);
+      setSpotifyConnections(sf.data.connections ?? []);
+
+      // If we don't have an active connection selected yet (first load, or
+      // the previously-remembered one no longer exists), fall back to
+      // whichever connection the backend actually used for this response
+      // so the switcher and the data on screen always agree.
+      const stillExists = sf.data.connections?.some((c) => c.id === connectionId);
+      if (!stillExists) {
+        const fallback = tr.data.statsfm_connection_id ?? sf.data.connections?.[0]?.id ?? null;
+        if (fallback) {
+          setActiveConnectionId(fallback);
+          localStorage.setItem(ACTIVE_CONNECTION_KEY, String(fallback));
+        }
+      }
+
+      // Show whichever connected source synced most recently — the active
+      // Spotify connection, plus Apple Music if that's connected too.
+      const activeSpotifyConn = sf.data.connections?.find((c) => c.id === connectionId);
+      const timestamps = [
+        activeSpotifyConn?.last_synced_at,
+        mcConn.data.connection?.last_synced_at,
+      ].filter(Boolean);
+      setLastSyncedAt(timestamps.length ? timestamps.sort().at(-1) : null);
+      setLoading(false);
+    },
+    []
+  );
 
   useEffect(() => {
-    load(window_);
-  }, [window_, load]);
+    load(window_, activeConnectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [window_, activeConnectionId]);
 
   const spotifyRecent = useMemo(
     () => recent.filter((item) => item.source !== 'apple_music'),
@@ -65,15 +107,12 @@ export default function Dashboard() {
     setSyncing(true);
     setSyncError(null);
 
-    // Sync whichever sources are connected. allSettled (not all) on
-    // purpose: one source failing shouldn't stop the other from syncing
-    // or from us reloading whatever did succeed — but unlike before, a
-    // real failure here is no longer swallowed silently. A 404 just means
-    // that particular service isn't linked at all, which is expected and
-    // not worth surfacing as an error; anything else (502 from the
-    // backend when it couldn't reach the source, a network error, etc.)
-    // gets shown so "Sync now" finishing doesn't quietly look successful
-    // when a source's "Last synced" time didn't actually move.
+    // Sync every connected Spotify account plus Apple Music, not just the
+    // one currently being viewed — "Sync now" should refresh all of a
+    // user's connections in one go rather than requiring them to switch
+    // to each account individually first. allSettled on purpose: one
+    // source failing shouldn't stop the others from syncing or from us
+    // reloading whatever did succeed.
     const [sf, mc] = await Promise.allSettled([
       api.post('/statsfm/sync'),
       api.post('/musicat/sync'),
@@ -99,7 +138,7 @@ export default function Dashboard() {
     }
 
     try {
-      await load(window_);
+      await load(window_, activeConnectionId);
     } finally {
       setSyncing(false);
     }
@@ -123,6 +162,11 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex flex-wrap items-center gap-3">
+            <SpotifyAccountSwitcher
+              connections={spotifyConnections}
+              activeId={activeConnectionId}
+              onChange={handleSwitchAccount}
+            />
             <TimeFilter value={window_} onChange={setWindow} />
             <button
               onClick={handleSync}
