@@ -45,11 +45,27 @@ export function AuthProvider({ children }) {
     await refresh();
   };
 
-  const register = async (name, email, password, password_confirmation) => {
+  // Step 1: submit name/email/password. This does NOT create an account
+  // or log the user in — it only validates the Gmail address and sends
+  // an OTP. Returns the server's response (e.g. email/expires_in_minutes)
+  // so the UI can move to the "enter code" step.
+  const startRegistration = async (name, email, password, password_confirmation) => {
     const { data } = await api.post('/auth/register', { name, email, password, password_confirmation });
+    return data;
+  };
+
+  // Step 2: the code from that email. Only this call actually creates the
+  // account and signs the user in.
+  const verifyRegistration = async (email, code) => {
+    const { data } = await api.post('/auth/register/verify', { email, code });
     localStorage.setItem('auth_token', data.token);
     setUser(data.user);
     await refresh();
+  };
+
+  const resendRegistrationCode = async (email) => {
+    const { data } = await api.post('/auth/register/resend', { email });
+    return data;
   };
 
   const logout = async () => {
@@ -75,7 +91,9 @@ export function AuthProvider({ children }) {
         hasAnyConnection,
         loading,
         login,
-        register,
+        startRegistration,
+        verifyRegistration,
+        resendRegistrationCode,
         logout,
         refresh,
       }}

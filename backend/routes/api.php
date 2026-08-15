@@ -19,7 +19,12 @@ Route::prefix('public')->group(function () {
 });
 
 // --- Auth --------------------------------------------------------------
+// Registration is a 3-step Gmail + OTP flow: register() only validates
+// the Gmail address and emails a code; verifyRegistration() is what
+// actually creates the `users` row, once the code checks out.
 Route::post('/auth/register', [AuthController::class, 'register']);
+Route::post('/auth/register/verify', [AuthController::class, 'verifyRegistration']);
+Route::post('/auth/register/resend', [AuthController::class, 'resendCode']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
