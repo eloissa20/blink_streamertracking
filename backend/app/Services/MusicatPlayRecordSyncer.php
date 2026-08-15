@@ -45,7 +45,11 @@ class MusicatPlayRecordSyncer
         // forever, since nothing re-checks it after the fact.
         $artistImages = [];
         foreach ($this->musicat->artistImageMap($connection->musicat_user_id) as $name => $url) {
-            $artistImages[strtoupper(trim($name))] = $url;
+            // mb_strtoupper(), not strtoupper() — see AllowedArtists::canonicalize()
+            // for why the plain (non-multibyte) version silently fails to
+            // fold accented names like "Rosé" the same way on both sides
+            // of this lookup.
+            $artistImages[mb_strtoupper(trim($name), 'UTF-8')] = $url;
         }
 
         foreach ($items as $item) {
@@ -64,7 +68,7 @@ class MusicatPlayRecordSyncer
                 continue;
             }
 
-            $imageKey = strtoupper(trim($normalized['artist_name']));
+            $imageKey = mb_strtoupper(trim($normalized['artist_name']), 'UTF-8');
             $normalized['artist_image_url'] = $artistImages[$imageKey] ?? null;
 
             $alreadyRecorded = PlayRecord::query()

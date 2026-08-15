@@ -43,6 +43,38 @@ class AllowedArtists
     }
 
     /**
+     * Normalize to a single Unicode composition form (NFC) before any
+     * comparison. "É" can be encoded two different-but-visually-identical
+     * ways: as one precomposed codepoint (U+00C9), or as a plain "E"
+     * (U+0045) followed by a separate combining acute accent (U+0301).
+     * Both render as "É" and both survive mb_strtoupper() unchanged, but
+     * they are different byte sequences and a strict `===` comparison
+     * between one of each will never match — no amount of case-folding
+     * fixes that, since it isn't a casing difference.
+     *
+     * Sources aren't consistent about which form they send: Stats.fm/
+     * Spotify's API has been observed sending "Rosé" in decomposed form
+     * for some streams, which fails to match our precomposed "ROSÉ" in
+     * NAMES below even after mb_strtoupper() folds the case — the exact
+     * "APT. attributed to Bruno Mars instead of ROSÉ" bug. Folding every
+     * comparison through this first closes that gap regardless of which
+     * form either side happens to be in.
+     *
+     * Falls back to the original string if the intl extension (which
+     * provides Normalizer) isn't loaded, rather than fatal-erroring —
+     * comparisons degrade to the old form-sensitive behavior in that case
+     * instead of breaking entirely.
+     */
+    private static function normalizeForm(string $value): string
+    {
+        if (class_exists(\Normalizer::class)) {
+            return \Normalizer::normalize($value, \Normalizer::FORM_C) ?: $value;
+        }
+
+        return $value;
+    }
+
+    /**
      * Case-insensitively match $artistName against the allow-list and
      * return the one canonical spelling it should be stored/displayed
      * under (e.g. "LiSA", "Lisa", "LISA" all return "LISA"), or null if
@@ -81,11 +113,22 @@ class AllowedArtists
             return null;
         }
 
-        $needle = strtoupper(trim($artistName));
+        // mb_strtoupper(), not strtoupper(): plain strtoupper() only
+        // uppercases ASCII a-z and leaves accented characters untouched.
+        // A source that sends "Rosé" (lowercase é) would uppercase to
+        // "ROSé" under strtoupper() — a different byte sequence from the
+        // canonical "ROSÉ" below — and silently fail to match, causing
+        // her plays to fall through to whichever other artist is listed
+        // first on the track (see StatsFmService::attributedArtist()).
+        //
+        // normalizeForm() runs FIRST, before case-folding: see its
+        // docblock for why a precomposed/decomposed mismatch survives
+        // mb_strtoupper() untouched and needs its own fix.
+        $needle = mb_strtoupper(self::normalizeForm(trim($artistName)), 'UTF-8');
         $needle = self::ALIASES[$needle] ?? $needle;
 
         foreach (self::NAMES as $name) {
-            if (strtoupper($name) === $needle) {
+            if (mb_strtoupper(self::normalizeForm($name), 'UTF-8') === $needle) {
                 return $name;
             }
         }
@@ -104,7 +147,7 @@ class AllowedArtists
     public static function matchableUpperNames(): array
     {
         return array_values(array_unique(array_merge(
-            array_map('strtoupper', self::NAMES),
+            array_map(fn ($name) => mb_strtoupper($name, 'UTF-8'), self::NAMES),
             array_keys(self::ALIASES)
         )));
     }

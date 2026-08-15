@@ -151,19 +151,31 @@ class PublicDashboardController extends Controller
 
     /**
      * Public "recently played", scoped to one platform just like the rest
-     * of this controller. Unlike the personal /me/recently-played
-     * endpoint, this stays behind ->allowedArtists() — the public page is
-     * a BLACKPINK-only leaderboard end to end, so every section
-     * (including recently played) only ever shows BLACKPINK/members
-     * plays. The "show non-allow-listed artists in recently played" rule
-     * is a My Stats-only behaviour (see PersonalStatsController).
+     * of this controller. Deliberately does NOT go through baseQuery()'s
+     * ->allowedArtists() filter — "Recently played" is a log of everything
+     * an opted-in user actually played, on both the personal My Stats page
+     * (see PersonalStatsController::recentlyPlayed) and here on the public
+     * page. Only Top Tracks/Top Artists are restricted to BLACKPINK and
+     * its members; Recently Played always shows the full unfiltered
+     * history for opted-in users on this platform.
      */
     public function recentlyPlayed(Request $request)
     {
         $platform = $this->platform($request);
+        $source = self::PLATFORM_SOURCES[$platform];
 
-        $rows = Cache::remember("public_dashboard_recently_played:{$platform}", 60, function () use ($platform) {
-            return (clone $this->baseQuery($platform))
+        $rows = Cache::remember("public_dashboard_recently_played:{$platform}", 60, function () use ($platform, $source) {
+            $optedInUserIds = StatsFmConnection::where('include_in_public_overview', true)
+                ->pluck('user_id')
+                ->merge(
+                    MusicatConnection::where('include_in_public_overview', true)->pluck('user_id')
+                )
+                ->unique();
+
+            return PlayRecord::query()
+                ->whereIn('user_id', $optedInUserIds)
+                ->where('source', $source)
+                ->matchingConnectedSource()
                 ->orderByDesc('played_at')
                 ->limit(50)
                 ->get()
