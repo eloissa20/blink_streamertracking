@@ -38,6 +38,12 @@ export default function Navbar() {
               <Link to="/dashboard" className="text-sm text-mist hover:text-white transition-colors px-3 py-2">
                 My Stats
               </Link>
+              <Link to="/missions" className="text-sm text-mist hover:text-white transition-colors px-3 py-2">
+                Missions
+              </Link>
+              <Link to="/achievements" className="text-sm text-mist hover:text-white transition-colors px-3 py-2">
+                Achievements
+              </Link>
               <Link to="/connect" className="text-sm text-mist hover:text-white transition-colors px-3 py-2">
                 Manage Connection
               </Link>
@@ -97,6 +103,20 @@ export default function Navbar() {
                 className="text-sm text-mist hover:text-white transition-colors px-3 py-2.5 rounded-lg hover:bg-white/5"
               >
                 My Stats
+              </Link>
+              <Link
+                to="/missions"
+                onClick={closeMenu}
+                className="text-sm text-mist hover:text-white transition-colors px-3 py-2.5 rounded-lg hover:bg-white/5"
+              >
+                Missions
+              </Link>
+              <Link
+                to="/achievements"
+                onClick={closeMenu}
+                className="text-sm text-mist hover:text-white transition-colors px-3 py-2.5 rounded-lg hover:bg-white/5"
+              >
+                Achievements
               </Link>
               <Link
                 to="/connect"

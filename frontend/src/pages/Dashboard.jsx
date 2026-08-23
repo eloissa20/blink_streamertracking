@@ -10,6 +10,7 @@ import ActivityChart from '../components/ActivityChart';
 import HeaderClock from '../components/HeaderClock';
 import Waveform from '../components/Waveform';
 import SpotifyAccountSwitcher from '../components/SpotifyAccountSwitcher';
+import LevelUpQueue from '../components/LevelUpQueue';
 
 // Remembers which of the user's Spotify accounts was last active across a
 // page reload. Purely a UI convenience — the backend still defaults to the
@@ -146,6 +147,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-24 pt-8 sm:pt-12">
+      <LevelUpQueue />
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

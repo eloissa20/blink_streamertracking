@@ -5,6 +5,8 @@ use App\Http\Controllers\MusicatController;
 use App\Http\Controllers\PersonalStatsController;
 use App\Http\Controllers\PublicDashboardController;
 use App\Http\Controllers\StatsFmController;
+use App\Http\Controllers\StreamerLevelController;
+use App\Http\Controllers\StreamingMissionController;
 use Illuminate\Support\Facades\Route;
 
 // --- Public: landing page dashboard, no login required ---------------------
@@ -53,4 +55,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me/top-artists', [PersonalStatsController::class, 'topArtists']);
     Route::get('/me/recently-played', [PersonalStatsController::class, 'recentlyPlayed']);
     Route::get('/me/daily-activity', [PersonalStatsController::class, 'dailyActivity']);
+
+    // --- Streamer Level System ---------------------------------------
+    // Persisted server-side (see StreamerAchievement) so unlocked levels
+    // follow the user across devices instead of living in localStorage.
+    Route::get('/me/streamer-levels', [StreamerLevelController::class, 'index']);
+
+    // --- Streaming Missions -------------------------------------------
+    // Shared community goals — progress is aggregated across every
+    // user's tracked plays, not just the viewer's own.
+    Route::get('/missions', [StreamingMissionController::class, 'index']);
 });

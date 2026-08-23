@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\User;
+use App\Support\GmailAddress;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -24,9 +25,18 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $email = fake()->unique()->safeEmail();
+
         return [
             'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
+            'email' => $email,
+            // users.email_canonical is NOT NULL + unique (see the
+            // 2026_04_01_000001_add_email_canonical_to_users_table
+            // migration) — it's not auto-populated by any model event, so
+            // every place that creates a User (factory, seeders, tests)
+            // has to set it explicitly, same as AuthController does for
+            // real registrations.
+            'email_canonical' => GmailAddress::canonicalize($email),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),

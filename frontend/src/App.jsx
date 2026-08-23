@@ -7,6 +7,9 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Connect from './pages/Connect';
 import Dashboard from './pages/Dashboard';
+import Missions from './pages/Missions';
+import Achievements from './pages/Achievements';
+import CardPreview from './pages/CardPreview';
 
 function FullScreenLoader() {
   return (
@@ -57,6 +60,30 @@ export default function App() {
             </RequireConnection>
           }
         />
+        {/* Missions only need a login, not a connected Spotify/Apple
+            Music account — every user can see and follow community
+            progress even before linking anything. */}
+        <Route
+          path="/missions"
+          element={
+            <RequireAuth>
+              <Missions />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/achievements"
+          element={
+            <RequireAuth>
+              <Achievements />
+            </RequireAuth>
+          }
+        />
+        {/* Dev-only design tool — not linked from the Navbar, not
+            gated behind auth (it renders no real user data). Safe to
+            delete this route before shipping to production if you'd
+            rather it not exist at all. */}
+        <Route path="/dev/cards" element={<CardPreview />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
