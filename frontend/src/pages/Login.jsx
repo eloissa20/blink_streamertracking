@@ -46,14 +46,14 @@ export default function Login() {
         {error && <p className="text-sm text-apple">{error}</p>}
         <button
           disabled={busy}
-          className="bg-aurora rounded-xl py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="bg-aurora text-[#0B0A12] rounded-xl py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {busy ? 'Logging in…' : 'Log in'}
         </button>
       </form>
       <p className="text-center text-sm text-mist mt-6">
         No account yet?{' '}
-        <Link to="/register" className="text-white underline underline-offset-4">
+        <Link to="/register" className="text-fg underline underline-offset-4">
           Create one
         </Link>
       </p>

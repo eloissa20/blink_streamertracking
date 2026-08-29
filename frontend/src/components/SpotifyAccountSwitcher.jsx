@@ -31,7 +31,7 @@ export default function SpotifyAccountSwitcher({ connections, activeId, onChange
     <div className="relative" ref={rootRef}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full border border-white/10 hover:border-white/30 px-3 py-2 text-sm transition-colors"
+        className="flex items-center gap-2 rounded-full border border-fg/10 hover:border-fg/30 px-3 py-2 text-sm transition-colors"
       >
         <SpotifyIcon className="w-4 h-4 text-spotify shrink-0" />
         <span className="truncate max-w-[9rem]">
@@ -56,7 +56,7 @@ export default function SpotifyAccountSwitcher({ connections, activeId, onChange
                   setOpen(false);
                 }}
                 className={`flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
-                  c.id === active.id ? 'bg-aurora text-white' : 'hover:bg-white/5 text-mist hover:text-white'
+                  c.id === active.id ? 'bg-aurora text-[#0B0A12]' : 'hover:bg-fg/5 text-mist hover:text-fg'
                 }`}
               >
                 <SpotifyIcon className="w-4 h-4 shrink-0" />

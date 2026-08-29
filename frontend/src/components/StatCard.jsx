@@ -22,7 +22,7 @@ export default function StatCard({ label, value, delay = 0, accent = false }) {
       <p className="relative text-[10px] sm:text-xs uppercase tracking-[0.15em] sm:tracking-[0.2em] text-mist font-medium mb-2 sm:mb-3">
         {label}
       </p>
-      <p className="relative font-mono tabular text-2xl sm:text-3xl md:text-4xl font-semibold text-white">
+      <p className="relative font-mono tabular text-2xl sm:text-3xl md:text-4xl font-semibold text-fg">
         <AnimatedCounter value={value} />
       </p>
     </motion.div>

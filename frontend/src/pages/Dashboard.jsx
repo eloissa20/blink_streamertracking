@@ -41,7 +41,7 @@ function LiveStatCard({ label, value, delay, primary = false }) {
       <p className="relative text-[10px] sm:text-xs uppercase tracking-[0.15em] sm:tracking-[0.2em] text-mist font-medium mb-2 sm:mb-3">
         {label}
       </p>
-      <p className="relative font-mono tabular text-2xl sm:text-3xl md:text-4xl font-semibold text-white">
+      <p className="relative font-mono tabular text-2xl sm:text-3xl md:text-4xl font-semibold text-fg">
         <AnimatedCounter value={value} />
       </p>
     </motion.div>
@@ -208,7 +208,7 @@ export default function Dashboard() {
           <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
             Personal View
           </p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white">
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-fg">
             Hey {user?.name?.split(' ')[0] ?? 'there'}, here's your sound
           </h1>
           <HeaderClock lastSyncedAt={lastSyncedAt} />
@@ -224,7 +224,7 @@ export default function Dashboard() {
             <button
               onClick={handleSync}
               disabled={syncing}
-              className="text-sm px-4 py-2 rounded-full border border-white/10 hover:border-white/30 transition-colors disabled:opacity-50 whitespace-nowrap"
+              className="text-sm px-4 py-2 rounded-full border border-fg/10 hover:border-fg/30 transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               {syncing ? 'Syncing…' : 'Sync now'}
             </button>
@@ -291,7 +291,7 @@ export default function Dashboard() {
             <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
               Live
             </p>
-            <h2 className="font-display text-2xl font-semibold text-white mb-4">
+            <h2 className="font-display text-2xl font-semibold text-fg mb-4">
               Recently Played
             </h2>
             <div className="grid md:grid-cols-2 gap-4 sm:gap-6">

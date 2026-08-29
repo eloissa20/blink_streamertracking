@@ -13,7 +13,7 @@ export default function AuthShell({ title, subtitle, children }) {
         <div className="flex justify-center mb-5">
           <Waveform bars={4} />
         </div>
-        <h1 className="font-display text-2xl font-semibold text-center text-white mb-1">
+        <h1 className="font-display text-2xl font-semibold text-center text-fg mb-1">
           {title}
         </h1>
         <p className="text-center text-mist text-sm mb-8">{subtitle}</p>

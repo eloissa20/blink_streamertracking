@@ -2,16 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------
+   Day / night mode
+   ---------------------------------------------------------------------
+   Every color token the app uses (ink, mist, fg) is defined here as an
+   "R G B" custom property, referenced from tailwind.config.js as
+   rgb(var(--color-x) / <alpha-value>). Toggling the `.light` class on
+   <html> (done by ThemeContext) swaps the whole palette at once — no
+   dark:/light: variant needed on individual elements. Dark is the
+   default, matching the app's original look. */
+:root {
+  --color-ink: 11 10 18;          /* #0B0A12 page background */
+  --color-ink-soft: 18 17 32;     /* #121120 */
+  --color-ink-surface: 34 66 72;  /* #224248 card fills */
+  --color-ink-border: 42 40 66;   /* #2A2842 hairlines */
+  --color-mist: 156 154 184;      /* #9C9AB8 secondary text */
+  --color-fg: 255 255 255;        /* primary text / icons */
+
+  --page-glow-1: rgba(89, 178, 146, 0.25);
+  --page-glow-2: rgba(255, 201, 77, 0.12);
+  --page-bg-solid: #182123;
+}
+
+html.light {
+  --color-ink: 246 246 250;       /* soft off-fg page background */
+  --color-ink-soft: 255 255 255;
+  --color-ink-surface: 255 255 255;
+  --color-ink-border: 224 224 235;
+  --color-mist: 100 99 122;       /* readable secondary text on light bg */
+  --color-fg: 17 16 26;           /* near-black primary text */
+
+  --page-glow-1: rgba(89, 178, 146, 0.14);
+  --page-glow-2: rgba(255, 201, 77, 0.16);
+  --page-bg-solid: #F6F6FA;
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(89, 178, 146, 0.25), transparent),
-    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(255, 201, 77, 0.12), transparent),
-    #182123;
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--page-glow-1), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 10%, var(--page-glow-2), transparent),
+    var(--page-bg-solid);
   min-height: 100vh;
+  transition: background-color 0.4s ease;
 }
 
 ::selection {
@@ -34,17 +70,17 @@ body {
    Falls back to the app's default violet/gold palette wherever
    `data-theme` isn't set (every other page). */
 :root {
-  --theme-bg: #182123;
-  --theme-glow-1: rgba(89, 178, 146, 0.25);
-  --theme-glow-2: rgba(255, 201, 77, 0.12);
+  --theme-bg: var(--page-bg-solid);
+  --theme-glow-1: var(--page-glow-1);
+  --theme-glow-2: var(--page-glow-2);
   --theme-accent: #59B292;
   --theme-accent-strong: #7FCBAE;
   --theme-accent-soft: rgba(89, 178, 146, 0.15);
   --theme-accent-soft-2: rgba(255, 201, 77, 0.15);
   --theme-accent-border: rgba(89, 178, 146, 0.4);
-  --theme-card-bg: rgba(34, 66, 72, 0.6);
-  --theme-card-border: rgba(255, 255, 255, 0.06);
-  --theme-scrollbar-thumb: #28423f;
+  --theme-card-bg: rgb(var(--color-ink-surface) / 0.6);
+  --theme-card-border: rgb(var(--color-ink-border) / 0.5);
+  --theme-scrollbar-thumb: rgb(var(--color-mist) / 0.6);
   --theme-radius-card: 1.5rem;
 }
 
@@ -65,6 +101,17 @@ body {
   --theme-radius-card: 1rem;
 }
 
+/* Day-mode take on the Spotify tab: same green accent, but the near-black
+   backdrop and dark glass cards flip to a bright, airy surface instead of
+   just going dim, otherwise "light mode" would look identical to dark. */
+html.light[data-theme='spotify'] {
+  --theme-bg: #F4FBF6;
+  --theme-glow-1: rgba(30, 215, 96, 0.14);
+  --theme-glow-2: rgba(29, 185, 84, 0.08);
+  --theme-card-bg: rgba(255, 255, 255, 0.8);
+  --theme-card-border: rgba(20, 20, 20, 0.08);
+}
+
 /* APPLE MUSIC / musicat — sleek, premium, Apple Music red */
 [data-theme='apple_music'] {
   --theme-bg: #16121a;
@@ -80,6 +127,16 @@ body {
   --theme-scrollbar-thumb: #FA2D48;
   /* Apple's UI leans into generously rounded, pillowy surfaces */
   --theme-radius-card: 1.75rem;
+}
+
+/* Day-mode take on the Apple Music tab: same red accent, bright surface
+   instead of the near-black default. */
+html.light[data-theme='apple_music'] {
+  --theme-bg: #FBF4F6;
+  --theme-glow-1: rgba(250, 45, 72, 0.10);
+  --theme-glow-2: rgba(255, 105, 135, 0.10);
+  --theme-card-bg: rgba(255, 255, 255, 0.8);
+  --theme-card-border: rgba(20, 20, 20, 0.08);
 }
 
 [data-theme] ::selection {
@@ -123,11 +180,15 @@ body {
 }
 
 .glass-card {
-  background: var(--theme-card-bg, rgba(34, 66, 72, 0.6));
+  background: var(--theme-card-bg, rgb(var(--color-ink-surface) / 0.6));
   backdrop-filter: blur(20px);
-  border: 1px solid var(--theme-card-border, rgba(38, 33, 33, 0.06));
+  border: 1px solid var(--theme-card-border, rgb(var(--color-ink-border) / 0.5));
   border-radius: var(--theme-radius-card, 1.5rem);
-  transition: background 0.5s ease, border-color 0.5s ease, border-radius 0.5s ease;
+  transition: background 0.5s ease, border-color 0.5s ease, border-radius 0.5s ease, box-shadow 0.5s ease;
+}
+
+html.light .glass-card {
+  box-shadow: 0 1px 2px rgba(20, 20, 40, 0.04), 0 8px 24px rgba(20, 20, 40, 0.06);
 }
 
 /* Dark, theme-matching scrollbar for scrollable lists — never falls back to
@@ -135,7 +196,7 @@ body {
    platform theme so it never feels out of place next to it. */
 .dark-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--theme-scrollbar-thumb, #283b42) transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb, rgb(var(--color-mist) / 0.6)) transparent;
 }
 .dark-scrollbar::-webkit-scrollbar {
   width: 8px;
@@ -144,15 +205,14 @@ body {
   background: transparent;
 }
 .dark-scrollbar::-webkit-scrollbar-thumb {
-  background-color: var(--theme-scrollbar-thumb, #28423f);
-  opacity: 0.5;
+  background-color: var(--theme-scrollbar-thumb, rgb(var(--color-mist) / 0.6));
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
   transition: background-color 0.5s ease;
 }
 .dark-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: var(--theme-scrollbar-thumb, #28423f);
+  background-color: var(--theme-scrollbar-thumb, rgb(var(--color-mist) / 0.9));
 }
 
 .tabular {

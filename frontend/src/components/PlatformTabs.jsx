@@ -33,7 +33,7 @@ export default function PlatformTabs({ value, onChange }) {
             key={key}
             onClick={() => onChange(key)}
             className={`relative flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold uppercase tracking-wide transition-colors ${
-              active ? 'text-white' : 'text-mist hover:text-white'
+              active ? 'text-white' : 'text-mist hover:text-fg'
             }`}
           >
             {active && (

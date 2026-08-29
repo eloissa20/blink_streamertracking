@@ -18,21 +18,21 @@ export default function RecentlyPlayedItem({ item, index = 0 }) {
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.6) }}
-      className="flex items-center gap-4 rounded-xl px-4 py-3 hover:bg-white/5 transition-colors"
+      className="flex items-center gap-4 rounded-xl px-4 py-3 hover:bg-fg/5 transition-colors"
     >
       <div className="w-10 h-10 rounded-lg bg-ink-surface flex-shrink-0 overflow-hidden">
         {item.artwork_url ? (
           <img src={item.artwork_url} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-aurora-soft flex items-center justify-center">
-            <span className="font-display font-semibold text-xs text-white">
+            <span className="font-display font-semibold text-xs text-fg">
               {item.track_name?.[0]?.toUpperCase() ?? '?'}
             </span>
           </div>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{item.track_name}</p>
+        <p className="truncate text-sm font-medium text-fg">{item.track_name}</p>
         <p className="truncate text-xs text-mist">{item.artist_name}</p>
       </div>
       <SourceBadge source={item.source} />

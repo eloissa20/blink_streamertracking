@@ -99,7 +99,7 @@ export default function Register() {
           {error && <p className="text-sm text-apple">{error}</p>}
           <button
             disabled={busy || code.length === 0}
-            className="bg-aurora rounded-xl py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="bg-aurora text-[#0B0A12] rounded-xl py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {busy ? 'Verifying…' : 'Verify & create account'}
           </button>
@@ -108,7 +108,7 @@ export default function Register() {
           <button
             type="button"
             onClick={() => setStep('details')}
-            className="underline underline-offset-4 hover:text-white transition-colors"
+            className="underline underline-offset-4 hover:text-fg transition-colors"
           >
             Use a different email
           </button>
@@ -116,7 +116,7 @@ export default function Register() {
             type="button"
             onClick={resend}
             disabled={cooldown > 0 || busy}
-            className="underline underline-offset-4 hover:text-white transition-colors disabled:opacity-50 disabled:no-underline"
+            className="underline underline-offset-4 hover:text-fg transition-colors disabled:opacity-50 disabled:no-underline"
           >
             {cooldown > 0 ? `Resend code (${cooldown}s)` : 'Resend code'}
           </button>
@@ -163,14 +163,14 @@ export default function Register() {
         {error && <p className="text-sm text-apple">{error}</p>}
         <button
           disabled={busy}
-          className="bg-aurora rounded-xl py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="bg-aurora text-[#0B0A12] rounded-xl py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {busy ? 'Sending code…' : 'Send verification code'}
         </button>
       </form>
       <p className="text-center text-sm text-mist mt-6">
         Already have an account?{' '}
-        <Link to="/login" className="text-white underline underline-offset-4">
+        <Link to="/login" className="text-fg underline underline-offset-4">
           Log in
         </Link>
       </p>

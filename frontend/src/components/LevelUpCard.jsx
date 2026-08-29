@@ -203,7 +203,7 @@ export default function LevelUpCard({
             <button
               onClick={handleClose}
               aria-label="Close"
-              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white bg-white/5 hover:bg-white/10 transition-colors z-10"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-fg/70 hover:text-fg bg-fg/5 hover:bg-fg/10 transition-colors z-10"
             >
               ✕
             </button>

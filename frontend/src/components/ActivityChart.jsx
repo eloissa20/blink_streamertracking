@@ -104,7 +104,7 @@ export default function ActivityChart({ days }) {
         <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
           Activity
         </p>
-        <h2 className="font-display text-xl sm:text-2xl font-semibold text-white">Last 30 days</h2>
+        <h2 className="font-display text-xl sm:text-2xl font-semibold text-fg">Last 30 days</h2>
       </div>
 
       <motion.svg
@@ -217,21 +217,21 @@ export default function ActivityChart({ days }) {
             />
 
             <foreignObject x={tooltipX} y={tooltipY} width={tooltipW} height="72">
-              <div className="rounded-lg border border-white/10 bg-[#12101f] px-3 py-2 shadow-lg text-xs">
+              <div className="rounded-lg border border-fg/10 bg-[#12101f] px-3 py-2 shadow-lg text-xs">
                 <p className="text-mist font-mono mb-1.5">{shortDateLabel(hovered.date)}</p>
                 <div className="flex items-center justify-between gap-3 mb-1">
-                  <span className="flex items-center gap-1.5 text-white">
+                  <span className="flex items-center gap-1.5 text-fg">
                     <span className="w-2 h-2 rounded-full" style={{ background: '#1DB954' }} />
                     Spotify
                   </span>
-                  <span className="font-mono tabular text-white">{hovered.spotify}</span>
+                  <span className="font-mono tabular text-fg">{hovered.spotify}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-1.5 text-white">
+                  <span className="flex items-center gap-1.5 text-fg">
                     <span className="w-2 h-2 rounded-full" style={{ background: '#FA2D48' }} />
                     Apple Music
                   </span>
-                  <span className="font-mono tabular text-white">{hovered.apple_music}</span>
+                  <span className="font-mono tabular text-fg">{hovered.apple_music}</span>
                 </div>
               </div>
             </foreignObject>

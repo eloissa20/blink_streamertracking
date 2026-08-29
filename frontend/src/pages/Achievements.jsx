@@ -149,7 +149,7 @@ export default function Achievements() {
           <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
             Your Progress
           </p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white">Achievements</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-fg">Achievements</h1>
           <p className="text-sm text-mist mt-2 max-w-xl">
             Every level you've unlocked, permanently — stored on your account, not just this browser, so it
             follows you to any device you log into.
@@ -158,7 +158,7 @@ export default function Achievements() {
 
         {!loading && achievements.length > 0 && (
           <div className="text-right">
-            <p className="font-mono tabular text-2xl sm:text-3xl font-semibold text-white">
+            <p className="font-mono tabular text-2xl sm:text-3xl font-semibold text-fg">
               <AnimatedCounter value={achievements.length} />
             </p>
             <p className="text-[10px] uppercase tracking-[0.15em] text-mist">Unlocked</p>

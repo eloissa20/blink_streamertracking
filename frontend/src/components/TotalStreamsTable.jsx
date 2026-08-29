@@ -36,7 +36,7 @@ export default function TotalStreamsTable({ tracks, emptyLabel }) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.35, delay: Math.min(i * 0.02, 0.5) }}
-              className="group hover:bg-white/5 transition-colors"
+              className="group hover:bg-fg/5 transition-colors"
             >
               <td className="px-2 sm:px-4 py-2.5 sm:py-3 rounded-l-xl">
                 <span className="font-mono text-mist text-xs sm:text-sm tabular">{i + 1}</span>
@@ -54,20 +54,20 @@ export default function TotalStreamsTable({ tracks, emptyLabel }) {
                             'linear-gradient(120deg, var(--theme-accent-soft, rgba(89,178,146,0.15)) 0%, var(--theme-accent-soft-2, rgba(255,201,77,0.15)) 100%)',
                         }}
                       >
-                        <span className="font-display font-semibold text-[10px] text-white">
+                        <span className="font-display font-semibold text-[10px] text-fg">
                           {t.track_name?.[0]?.toUpperCase() ?? '?'}
                         </span>
                       </div>
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">{t.track_name}</p>
+                    <p className="truncate text-sm font-medium text-fg">{t.track_name}</p>
                     <p className="truncate text-xs text-mist">{t.artist_name}</p>
                   </div>
                 </div>
               </td>
               <td className="px-2 sm:px-4 py-2.5 sm:py-3 text-right">
-                <span className="font-mono tabular text-sm sm:text-base font-semibold text-white">
+                <span className="font-mono tabular text-sm sm:text-base font-semibold text-fg">
                   {Number(t.stream_count).toLocaleString()}
                 </span>
               </td>

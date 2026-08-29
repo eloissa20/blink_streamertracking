@@ -1,15 +1,23 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['selector', ':not(.light)'],
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
+        // ink, mist, and fg are driven by CSS custom properties (see
+        // src/index.css) so the whole app repaints between day/night mode
+        // just by toggling a `.light` class on <html> — no per-component
+        // dark: variants needed. The rgb(... / <alpha-value>) format keeps
+        // Tailwind's opacity modifiers (e.g. bg-ink/70) working.
         ink: {
-          DEFAULT: '#0B0A12',
-          soft: '#121120',
-          surface: '#224248',
-          border: '#2A2842',
+          DEFAULT: 'rgb(var(--color-ink) / <alpha-value>)',
+          soft: 'rgb(var(--color-ink-soft) / <alpha-value>)',
+          surface: 'rgb(var(--color-ink-surface) / <alpha-value>)',
+          border: 'rgb(var(--color-ink-border) / <alpha-value>)',
         },
+        mist: 'rgb(var(--color-mist) / <alpha-value>)',
+        fg: 'rgb(var(--color-fg) / <alpha-value>)',
         violet: {
           DEFAULT: '#59B292',
           bright: '#7FCBAE',
@@ -21,7 +29,6 @@ export default {
         coral: '#FA6781',
         spotify: '#1ED760',
         apple: '#FA2D48',
-        mist: '#9C9AB8',
       },
       fontFamily: {
         display: ['"Inter"', 'sans-serif'],

@@ -97,7 +97,7 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-3">
           <SpotifyIcon className="w-5 h-5 text-spotify" />
-          <h2 className="font-display text-xl font-semibold text-white">Spotify</h2>
+          <h2 className="font-display text-xl font-semibold text-fg">Spotify</h2>
         </div>
         {connections.length > 0 && (
           <span className="text-xs text-mist">
@@ -121,11 +121,11 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
           {connections.map((c) => (
             <div
               key={c.id}
-              className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3"
+              className="flex items-center gap-3 rounded-xl border border-fg/10 px-4 py-3"
             >
               <SpotifyIcon className="w-5 h-5 text-spotify shrink-0" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-white truncate">
+                <p className="text-sm font-medium text-fg truncate">
                   {c.label || c.statsfm_username}
                 </p>
                 <p className="text-xs text-mist truncate">@{c.statsfm_username}</p>
@@ -133,7 +133,7 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
               <button
                 onClick={() => disconnect(c.id)}
                 disabled={busyId === c.id}
-                className="text-xs px-3 py-1.5 rounded-full border border-white/10 hover:border-apple/50 hover:text-apple transition-colors disabled:opacity-50 whitespace-nowrap"
+                className="text-xs px-3 py-1.5 rounded-full border border-fg/10 hover:border-apple/50 hover:text-apple transition-colors disabled:opacity-50 whitespace-nowrap"
               >
                 {busyId === c.id ? 'Removing…' : 'Disconnect'}
               </button>
@@ -146,7 +146,7 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
 
       {!isLoading && !atLimit && (
         <>
-          <form className="flex flex-col gap-3 sm:flex-row" onSubmit={connectOne}>
+          <form className="flex flex-col gap-3" onSubmit={connectOne}>
             <input
               type="text"
               placeholder="Stats.fm username"
@@ -167,7 +167,7 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
           <button
             type="button"
             onClick={() => setBulkOpen((v) => !v)}
-            className="text-xs text-mist hover:text-white transition-colors mt-3"
+            className="text-xs text-mist hover:text-fg transition-colors mt-3"
           >
             {bulkOpen ? 'Hide bulk add' : 'Connect several at once →'}
           </button>
@@ -184,7 +184,7 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
               <button
                 type="submit"
                 disabled={bulkBusy || !bulkText.trim()}
-                className="rounded-xl py-2.5 font-medium border border-white/10 hover:border-white/30 transition-colors disabled:opacity-50"
+                className="rounded-xl py-2.5 font-medium border border-fg/10 hover:border-fg/30 transition-colors disabled:opacity-50"
               >
                 {bulkBusy ? 'Connecting all…' : 'Connect all'}
               </button>
@@ -221,7 +221,7 @@ function AppleMusicPanel({ connection, isLoading, handle, setHandle, error, busy
     <div className="glass-card rounded-3xl p-6 sm:p-8">
       <div className="flex items-center gap-3 mb-1">
         <AppleMusicIcon className="w-5 h-5 text-apple" />
-        <h2 className="font-display text-xl font-semibold text-white">Apple Music</h2>
+        <h2 className="font-display text-xl font-semibold text-fg">Apple Music</h2>
       </div>
       <p className="text-sm text-mist mb-6">Tracked via Musicat</p>
 
@@ -233,10 +233,10 @@ function AppleMusicPanel({ connection, isLoading, handle, setHandle, error, busy
 
       {!isLoading && connection && (
         <>
-          <div className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3 mb-4">
+          <div className="flex items-center gap-3 rounded-xl border border-fg/10 px-4 py-3 mb-4">
             <AppleMusicIcon className="w-5 h-5 text-apple" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-white truncate">Connected</p>
+              <p className="text-sm font-medium text-fg truncate">Connected</p>
               <p className="text-xs text-mist truncate">{connection.username}</p>
             </div>
           </div>
@@ -244,7 +244,7 @@ function AppleMusicPanel({ connection, isLoading, handle, setHandle, error, busy
           <button
             onClick={onDisconnect}
             disabled={!!busy}
-            className="w-full rounded-xl py-3 font-medium border border-white/10 hover:border-apple/50 hover:text-apple transition-colors disabled:opacity-50"
+            className="w-full rounded-xl py-3 font-medium border border-fg/10 hover:border-apple/50 hover:text-apple transition-colors disabled:opacity-50"
           >
             {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
           </button>
@@ -410,7 +410,7 @@ export default function Connect() {
         <div className="flex justify-center mb-5">
           <Waveform bars={5} />
         </div>
-        <h1 className="font-display text-2xl font-semibold text-center text-white mb-2">
+        <h1 className="font-display text-2xl font-semibold text-center text-fg mb-2">
           Connect your listening
         </h1>
         <p className="text-center text-mist text-sm mb-8 max-w-lg mx-auto">
@@ -444,7 +444,7 @@ export default function Connect() {
           <div className="text-center mt-8">
             <button
               onClick={() => navigate('/dashboard')}
-              className="text-sm text-mist hover:text-white transition-colors"
+              className="text-sm text-mist hover:text-fg transition-colors"
             >
               Back to My Stats
             </button>

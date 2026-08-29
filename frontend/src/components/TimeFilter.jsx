@@ -13,7 +13,7 @@ export default function TimeFilter({ value, onChange }) {
           key={opt.key}
           onClick={() => onChange(opt.key)}
           className={`relative px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
-            value === opt.key ? 'text-white' : 'text-mist hover:text-white'
+            value === opt.key ? 'text-[#0B0A12]' : 'text-mist hover:text-fg'
           }`}
         >
           {value === opt.key && (

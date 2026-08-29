@@ -63,7 +63,7 @@ export default function CardPreview() {
         <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
           Developer Tool
         </p>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white">Level-Up Card Preview</h1>
+        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-fg">Level-Up Card Preview</h1>
         <p className="text-sm text-mist mt-2 max-w-xl">
           Click any cell to pop that exact card with placeholder data — no streams, no login, no backend
           calls. Use this to iterate on colors/copy/layout in LevelUpCard.jsx and artistThemes.js.
@@ -90,7 +90,7 @@ export default function CardPreview() {
           <tbody>
             {Object.values(THEMES).map((t) => (
               <tr key={t.key}>
-                <td className="px-2 py-2 text-white text-sm font-medium whitespace-nowrap">{t.label}</td>
+                <td className="px-2 py-2 text-fg text-sm font-medium whitespace-nowrap">{t.label}</td>
                 {TIER_OPTIONS.map((tier) => (
                   <td key={tier} className="px-2 py-2">
                     <div className="flex flex-col gap-1.5">

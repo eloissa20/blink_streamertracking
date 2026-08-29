@@ -19,7 +19,7 @@ export default function Section({ eyebrow, title, action, children, delay = 0 })
               {eyebrow}
             </p>
           )}
-          <h2 className="font-display text-xl sm:text-2xl font-semibold text-white">{title}</h2>
+          <h2 className="font-display text-xl sm:text-2xl font-semibold text-fg">{title}</h2>
         </div>
         {action}
       </div>

@@ -95,7 +95,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.05 }}
-          className="font-display text-3xl sm:text-4xl md:text-6xl font-semibold tracking-tight text-white"
+          className="font-display text-3xl sm:text-4xl md:text-6xl font-semibold tracking-tight text-fg"
         >
           {copy.title}
         </motion.h1>

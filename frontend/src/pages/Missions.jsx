@@ -101,7 +101,7 @@ export default function Missions() {
         <p className="text-xs uppercase tracking-[0.2em] text-violet-bright font-semibold mb-1">
           Community
         </p>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-white">Streaming Missions</h1>
+        <h1 className="font-display text-2xl sm:text-3xl font-semibold text-fg">Streaming Missions</h1>
         <p className="text-sm text-mist mt-2 max-w-xl">
           Shared goals every tracked streamer counts toward — your plays add to the same progress bar
           everyone else sees, no matter which account you're signed in with.
