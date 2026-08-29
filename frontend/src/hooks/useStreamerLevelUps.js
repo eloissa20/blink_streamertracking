@@ -17,6 +17,11 @@ export default function useStreamerLevelUps() {
   const [queue, setQueue] = useState([]);
   const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Every `key:level` unlocked by the most recent refresh — kept around
+  // (unlike `queue`, which drains as popups are dismissed) so the
+  // Achievements grid can still highlight the matching badge with a
+  // pulse/glow after the celebration popup itself has been closed.
+  const [newlyUnlockedKeys, setNewlyUnlockedKeys] = useState(() => new Set());
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -39,6 +44,11 @@ export default function useStreamerLevelUps() {
 
       if (newCards.length) {
         setQueue((prev) => [...prev, ...newCards]);
+        setNewlyUnlockedKeys((prev) => {
+          const next = new Set(prev);
+          newCards.forEach((c) => next.add(c.id));
+          return next;
+        });
       }
     } finally {
       setLoading(false);
@@ -58,6 +68,7 @@ export default function useStreamerLevelUps() {
     remaining: queue.length,
     dismissCurrent,
     achievements,
+    newlyUnlockedKeys,
     loading,
     refresh,
   };

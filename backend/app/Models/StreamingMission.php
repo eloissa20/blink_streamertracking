@@ -13,6 +13,7 @@ class StreamingMission extends Model
 
     protected $fillable = [
         'title',
+        'slug',
         'description',
         'track_id',
         'track_name',

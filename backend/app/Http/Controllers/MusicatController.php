@@ -94,12 +94,21 @@ class MusicatController extends Controller
         // fails to render on this first attempt (slow page, transient
         // Musicat/Chromium hiccup) shouldn't undo an otherwise-valid
         // connect. The user can always hit "Sync now" once linked.
+        //
+        // Catches \Throwable, not just SourceUnavailableException: the
+        // connection row above is already committed, so any other
+        // exception thrown while scraping/parsing the first sync (not
+        // just "couldn't reach it") must not turn this into a 500 —
+        // otherwise the account ends up connected in the database while
+        // the request still reports failure, and the user only sees it
+        // worked after manually refreshing the page.
         try {
             $this->syncer->sync($connection);
-        } catch (SourceUnavailableException $e) {
+        } catch (\Throwable $e) {
             Log::warning('Initial Musicat sync failed after connect', [
                 'connection_id' => $connection->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
         }
 

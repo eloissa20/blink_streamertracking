@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
 
-export default function Section({ eyebrow, title, action, children }) {
+export default function Section({ eyebrow, title, action, children, delay = 0 }) {
   return (
     <motion.section
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.55, delay, ease: [0.16, 1, 0.3, 1] }}
       className="glass-card p-4 sm:p-6 md:p-8"
     >
       <div className="flex items-center justify-between mb-6 flex-wrap gap-4">

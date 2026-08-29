@@ -170,12 +170,24 @@ class StatsFmController extends Controller
         // Best-effort: a first-sync hiccup right after connecting
         // shouldn't undo an otherwise-valid connection (see
         // MusicatController::connect() for the same reasoning).
+        //
+        // Catches \Throwable, not just SourceUnavailableException: the
+        // connection row above is already committed by this point, so
+        // ANY exception here (a malformed timestamp from Stats.fm, an
+        // unexpected DB constraint, etc.) — not just a down API — must
+        // not turn into a 500 for this request. Letting a narrower catch
+        // miss one of those was causing a real bug: the account would
+        // connect successfully, then this request would still fail with
+        // an error, leaving the user staring at "Could not connect that
+        // account" for an account that actually *did* connect (only
+        // visible as connected after they manually refreshed).
         try {
             $this->syncer->sync($connection);
-        } catch (SourceUnavailableException $e) {
+        } catch (\Throwable $e) {
             Log::warning('Initial Stats.fm sync failed after connect', [
                 'connection_id' => $connection->id,
                 'error' => $e->getMessage(),
+                'exception' => get_class($e),
             ]);
         }
 

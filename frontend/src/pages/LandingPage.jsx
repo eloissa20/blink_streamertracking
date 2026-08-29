@@ -12,11 +12,13 @@ import TotalStreamsTable from '../components/TotalStreamsTable';
 
 const PLATFORM_COPY = {
   spotify: {
+    title: 'Philippines Spotify Stream',
     tagline: "Every stream, tracked in one place — powered by Stats.fm's Spotify data.",
     emptyLabel: 'No Spotify streams recorded yet.',
     recentEmptyLabel: 'No recent Spotify plays yet.',
   },
   apple_music: {
+    title: 'Philippines Apple Music Stream',
     tagline: "Every stream, tracked in one place — powered by Musicat's Apple Music data.",
     emptyLabel: 'No Apple Music streams recorded yet.',
     recentEmptyLabel: 'No recent Apple Music plays yet.',
@@ -95,7 +97,7 @@ export default function LandingPage() {
           transition={{ duration: 0.6, delay: 0.05 }}
           className="font-display text-3xl sm:text-4xl md:text-6xl font-semibold tracking-tight text-white"
         >
-          Philippines Stream Overview
+          {copy.title}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 16 }}

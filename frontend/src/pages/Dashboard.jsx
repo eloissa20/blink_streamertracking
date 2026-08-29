@@ -11,6 +11,42 @@ import HeaderClock from '../components/HeaderClock';
 import Waveform from '../components/Waveform';
 import SpotifyAccountSwitcher from '../components/SpotifyAccountSwitcher';
 import LevelUpQueue from '../components/LevelUpQueue';
+import AnimatedCounter from '../components/AnimatedCounter';
+import useStreamerLevelUps from '../hooks/useStreamerLevelUps';
+
+// One live-updating number for the "My Stats" hero row. Reuses StatCard's
+// existing count-up + prefers-reduced-motion handling; the "primary" card
+// also gets a soft one-time shimmer sweep to draw the eye on tab open.
+function LiveStatCard({ label, value, delay, primary = false }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay, ease: [0.16, 1, 0.3, 1] }}
+      className="glass-card p-4 sm:p-6 relative overflow-hidden"
+      style={primary ? { boxShadow: '0 0 0 1px var(--theme-accent-border, rgba(89,178,146,0.4))' } : undefined}
+    >
+      {primary && (
+        <motion.div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'linear-gradient(100deg, transparent 30%, rgba(255,255,255,0.14) 50%, transparent 70%)',
+            backgroundSize: '200% 100%',
+          }}
+          initial={{ backgroundPosition: '150% 0%' }}
+          animate={{ backgroundPosition: '-50% 0%' }}
+          transition={{ duration: 1.4, delay: delay + 0.3, ease: 'easeInOut' }}
+        />
+      )}
+      <p className="relative text-[10px] sm:text-xs uppercase tracking-[0.15em] sm:tracking-[0.2em] text-mist font-medium mb-2 sm:mb-3">
+        {label}
+      </p>
+      <p className="relative font-mono tabular text-2xl sm:text-3xl md:text-4xl font-semibold text-white">
+        <AnimatedCounter value={value} />
+      </p>
+    </motion.div>
+  );
+}
 
 // Remembers which of the user's Spotify accounts was last active across a
 // page reload. Purely a UI convenience — the backend still defaults to the
@@ -21,6 +57,7 @@ const ACTIVE_CONNECTION_KEY = 'active_statsfm_connection_id';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { achievements } = useStreamerLevelUps();
   const [window_, setWindow] = useState('week');
   const [tracks, setTracks] = useState([]);
   const [artists, setArtists] = useState([]);
@@ -104,6 +141,20 @@ export default function Dashboard() {
     [recent]
   );
 
+  // Live numbers for the "My Stats" hero row. Streams is the sum of the
+  // currently-loaded window's top tracks (real data already on the page,
+  // not a separate all-time counter this endpoint doesn't expose).
+  // Level/Achievements come from the same streamer-levels data the
+  // Achievements tab uses, so the two pages always agree.
+  const windowStreams = useMemo(
+    () => tracks.reduce((sum, t) => sum + Number(t.play_count ?? 0), 0),
+    [tracks]
+  );
+  const highestLevel = useMemo(
+    () => achievements.reduce((max, a) => Math.max(max, a.level ?? 0), 0),
+    [achievements]
+  );
+
   const handleSync = async () => {
     setSyncing(true);
     setSyncError(null);
@@ -184,6 +235,29 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
+      {/* Live stat strip — small pulsing "live" dot next to the label,
+          numbers count up on mount/refresh via LiveStatCard. */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="relative flex w-2 h-2">
+          <motion.span
+            className="absolute inline-flex w-full h-full rounded-full"
+            style={{ background: 'var(--theme-accent-strong, #7FCBAE)' }}
+            animate={{ opacity: [0.6, 0, 0.6], scale: [1, 2.2, 1] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <span
+            className="relative inline-flex rounded-full w-2 h-2"
+            style={{ background: 'var(--theme-accent-strong, #7FCBAE)' }}
+          />
+        </span>
+        <p className="text-[10px] uppercase tracking-[0.2em] text-mist font-semibold">Live</p>
+      </div>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-8">
+        <LiveStatCard label={`Streams — ${window_}`} value={windowStreams} delay={0} primary />
+        <LiveStatCard label="Level" value={highestLevel} delay={0.06} />
+        <LiveStatCard label="Achievements" value={achievements.length} delay={0.12} />
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-24">
           <Waveform bars={5} className="scale-150" />
@@ -199,6 +273,7 @@ export default function Dashboard() {
               renderMetric={(t) => `${Number(t.play_count).toLocaleString()} play${t.play_count === 1 ? '' : 's'}`}
               renderImage={(t) => t.artwork_url}
               imageShape="square"
+              delay={0}
             />
             <StatListCard
               title="Top Artists"
@@ -208,6 +283,7 @@ export default function Dashboard() {
               renderMetric={(a) => `${Number(a.play_count).toLocaleString()} streams`}
               renderImage={(a) => a.artist_image_url}
               imageShape="circle"
+              delay={0.08}
             />
           </div>
 
@@ -219,20 +295,28 @@ export default function Dashboard() {
               Recently Played
             </h2>
             <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
-              <div>
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              >
                 <p className="text-sm font-medium text-mist mb-3">Spotify</p>
                 <RecentlyPlayedTable
                   items={spotifyRecent}
                   emptyLabel='No recent Spotify plays synced yet — hit "Sync now".'
                 />
-              </div>
-              <div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              >
                 <p className="text-sm font-medium text-mist mb-3">Apple Music</p>
                 <RecentlyPlayedTable
                   items={appleMusicRecent}
                   emptyLabel='No recent Apple Music plays synced yet — hit "Sync now".'
                 />
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>

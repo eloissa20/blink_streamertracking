@@ -8,9 +8,15 @@ export default function StatListCard({
   renderMetric,
   renderImage,
   imageShape = 'square',
+  delay = 0,
 }) {
   return (
-    <div className="glass-card rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay, ease: [0.16, 1, 0.3, 1] }}
+      className="glass-card rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col"
+    >
       <h2 className="font-display text-xl sm:text-2xl font-semibold text-white mb-4">{title}</h2>
 
       <div className="flex-1 max-h-[420px] overflow-y-auto dark-scrollbar pr-2">
@@ -59,6 +65,6 @@ export default function StatListCard({
           })}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

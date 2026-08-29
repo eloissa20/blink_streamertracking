@@ -7,14 +7,26 @@ export default function TotalStreamsTable({ tracks, emptyLabel }) {
   }
 
   return (
-    <div className="overflow-x-auto -mx-2 sm:mx-0">
+    // Fixed-height scroll box so a long Lifetime Total Streams list can't
+    // stretch the whole page — header row stays sticky to the top of the
+    // box (via `sticky top-0` + a solid bg so rows don't show through it)
+    // while the body scrolls underneath it. Height shrinks slightly on
+    // mobile per spec (~360px) vs desktop (~420px).
+    <div className="overflow-x-auto overflow-y-auto -mx-2 sm:mx-0 max-h-[360px] sm:max-h-[420px] dark-scrollbar rounded-xl">
       <table className="w-full min-w-[520px] border-separate border-spacing-y-0.5">
-        <thead>
-          <tr className="text-mist text-[10px] sm:text-xs uppercase tracking-[0.15em] font-medium">
-            <th className="text-left font-medium px-2 sm:px-4 pb-2 w-10">#</th>
-            <th className="text-left font-medium px-2 sm:px-4 pb-2">Track</th>
-            <th className="text-right font-medium px-2 sm:px-4 pb-2">Total Streams</th>
-            <th className="text-right font-medium px-2 sm:px-4 pb-2">Today vs. Yesterday</th>
+        <thead className="sticky top-0 z-10">
+          <tr
+            className="text-mist text-[10px] sm:text-xs uppercase tracking-[0.15em] font-medium"
+            style={{
+              background: 'var(--theme-card-bg, rgba(34, 66, 72, 0.6))',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+            }}
+          >
+            <th className="text-left font-medium px-2 sm:px-4 pb-2 pt-1 w-10">#</th>
+            <th className="text-left font-medium px-2 sm:px-4 pb-2 pt-1">Track</th>
+            <th className="text-right font-medium px-2 sm:px-4 pb-2 pt-1">Total Streams</th>
+            <th className="text-right font-medium px-2 sm:px-4 pb-2 pt-1">Today vs. Yesterday</th>
           </tr>
         </thead>
         <tbody>

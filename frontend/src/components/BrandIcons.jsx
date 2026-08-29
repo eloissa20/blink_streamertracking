@@ -1,3 +1,5 @@
+import appleMusicIconSrc from '../images/Apple_Music_icon.svg.webp';
+
 export function SpotifyIcon({ className = 'w-5 h-5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
@@ -6,11 +8,18 @@ export function SpotifyIcon({ className = 'w-5 h-5' }) {
   );
 }
 
+// Single source of truth for the Apple Music mark across the whole app —
+// every place that shows the icon (sidebar/nav, headers, public stats,
+// missions, achievements, my stats, buttons, cards, loading/empty states)
+// imports this component rather than drawing its own SVG, so swapping the
+// asset here updates it everywhere at once.
 export function AppleMusicIcon({ className = 'w-5 h-5' }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
-      <path d="M16.85 2.1c-.42.5-1.1.9-1.76.85-.09-.67.24-1.38.63-1.82C16.15 .6 16.9.24 17.5.2c.07.7-.2 1.4-.65 1.9Zm.62 1.02c-.98-.06-1.81.55-2.28.55-.47 0-1.2-.52-1.98-.5-1.02.02-1.96.6-2.48 1.51-1.06 1.83-.28 4.55.76 6.04.5.73 1.1 1.55 1.9 1.52.75-.03 1.04-.49 1.95-.49.91 0 1.17.49 1.98.47.82-.02 1.34-.75 1.84-1.48.58-.85.82-1.67.83-1.72-.02-.01-1.6-.62-1.61-2.44-.02-1.53 1.24-2.26 1.3-2.3-.71-1.05-1.82-1.17-2.21-1.16Z" />
-      <path d="M4 13.5h9v1.2H5.3V17h6.9v1.2H5.3v3.3H4v-8Zm10.3 4.9c0-1.5 1.1-2.6 2.65-2.6.68 0 1.24.22 1.65.6v-.44h1.2v6.9h-1.2v-.5c-.4.4-.98.64-1.65.64-1.55 0-2.65-1.1-2.65-2.6v-2Z" />
-    </svg>
+    <img
+      src={appleMusicIconSrc}
+      alt="Apple Music"
+      className={`${className} object-contain rounded-[22%]`}
+      draggable={false}
+    />
   );
 }

@@ -14,7 +14,7 @@ const SPOTIFY_ACCENT = { backgroundColor: '#1DB954', color: '#000' };
  * quick-add for one more, and a bulk-add box so linking 5+ accounts
  * doesn't mean repeating the single-account form five separate times.
  */
-function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemoved }) {
+function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemoved, onVerifyConnected }) {
   const [handle, setHandle] = useState('');
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null); // connection id currently being disconnected, or 'connect'
@@ -31,12 +31,26 @@ function SpotifyPanel({ connections, isLoading, maxConnections, onAdded, onRemov
     if (!handle) return;
     setError(null);
     setBusyId('connect');
+    const beforeCount = connections.length;
     try {
       await api.post('/statsfm/connect', { statsfm_handle: handle, source: 'spotify' });
       setHandle('');
       await onAdded();
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not connect that account.');
+      // This request can fail at the HTTP layer even when the account
+      // was actually linked a moment earlier server-side (e.g. the
+      // best-effort first sync erroring after the connection row was
+      // already committed, or the response getting dropped in transit).
+      // Before showing an error, re-check whether a new connection
+      // actually shows up now — otherwise the user sees "Could not
+      // connect that account" for an account that, on refresh, turns
+      // out to already be connected.
+      const nowConnected = await onVerifyConnected(beforeCount);
+      if (nowConnected) {
+        setHandle('');
+      } else {
+        setError(err.response?.data?.message || 'Could not connect that account.');
+      }
     } finally {
       setBusyId(null);
     }
@@ -312,6 +326,30 @@ export default function Connect() {
     await loadConnections();
   };
 
+  // Called only when the connect request itself errored, to double-check
+  // whether the account actually got linked anyway (see the comment in
+  // SpotifyPanel.connectOne for why that can happen). Returns true and
+  // finishes the normal "success" flow if a new connection now exists;
+  // returns false — leaving the caller to show its error — if it
+  // genuinely didn't connect.
+  const verifySpotifyConnected = async (previousCount) => {
+    try {
+      const { data } = await api.get('/statsfm/connections');
+      setSfConnections(data.connections ?? []);
+      setSfMax(data.max_connections ?? null);
+      if ((data.connections?.length ?? 0) > previousCount) {
+        await refresh();
+        navigate('/dashboard');
+        return true;
+      }
+    } catch {
+      // Couldn't even confirm one way or the other — treat as still
+      // failed so the original error message is shown rather than
+      // silently swallowed.
+    }
+    return false;
+  };
+
   const connectMusicat = async (e) => {
     e.preventDefault();
     if (!mcHandle) return;
@@ -323,6 +361,21 @@ export default function Connect() {
       await loadConnections();
       navigate('/dashboard');
     } catch (err) {
+      // Same reasoning as verifySpotifyConnected above: this request can
+      // fail even though the account was actually linked a moment
+      // earlier server-side, so re-check before reporting failure.
+      try {
+        const { data } = await api.get('/musicat/connection');
+        if (data.connected) {
+          setMcConnection({ ...data.connection, username: data.connection.musicat_username });
+          setMcHandle('');
+          await refresh();
+          navigate('/dashboard');
+          return;
+        }
+      } catch {
+        // Couldn't confirm either way — fall through to the error below.
+      }
       setMcError(err.response?.data?.message || 'Could not connect that account.');
     } finally {
       setMcBusy(null);
@@ -372,6 +425,7 @@ export default function Connect() {
             maxConnections={sfMax}
             onAdded={handleSpotifyAdded}
             onRemoved={handleSpotifyRemoved}
+            onVerifyConnected={verifySpotifyConnected}
           />
 
           <AppleMusicPanel
