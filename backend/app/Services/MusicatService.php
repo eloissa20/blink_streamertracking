@@ -390,15 +390,39 @@ class MusicatService
                     // hitting something wider than a single text node,
                     // which should be the row's own container (artwork +
                     // text block together).
+                    //
+                    // IMPORTANT: "wider than a single text node" was
+                    // previously read as "the first ancestor with 2+
+                    // children" and the climb stopped there immediately.
+                    // On the real markup that first multi-child ancestor
+                    // is the text-only wrapper (track name / artist name /
+                    // meta line) — the thumbnail <img> is a *sibling* of
+                    // that wrapper, one level further up, so stopping here
+                    // captured a row with no image in it at all, and every
+                    // track/artist fell back to the letter-avatar
+                    // placeholder client-side. Instead, keep climbing
+                    // (still capped at 6 levels) until the candidate
+                    // actually contains an <img> descendant, so the
+                    // captured row includes the thumbnail. If no <img>
+                    // ever shows up within the cap (e.g. a row genuinely
+                    // has no artwork), fall back to the old first-multi-
+                    // child behavior rather than climbing all the way to
+                    // some much larger ancestor.
                     const findRowElements = () => Array.from(document.querySelectorAll('*'))
                         .filter((el) => el.children.length === 0 && ROW_META_RE.test(el.textContent || ''))
                         .map((metaEl) => {
                             let row = metaEl;
+                            let fallback = null;
                             for (let i = 0; i < 6 && row.parentElement; i++) {
                                 row = row.parentElement;
-                                if (row.children.length >= 2) break;
+                                if (!fallback && row.children.length >= 2) {
+                                    fallback = row;
+                                }
+                                if (row.querySelector('img')) {
+                                    return row;
+                                }
                             }
-                            return row;
+                            return fallback || row;
                         });
 
                     // textContent -> outerHTML, de-duplicated, first-seen
