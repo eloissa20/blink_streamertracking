@@ -37,10 +37,16 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = useCallback((platformKey) => {
+  // `silent` skips the full-page loading spinner — used for the
+  // background poll below so a periodic refresh doesn't flash the whole
+  // page blank every time it runs. The initial mount/platform-switch call
+  // still shows the spinner since there's nothing on screen yet.
+  const load = useCallback((platformKey, { silent = false } = {}) => {
     let mounted = true;
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
 
     Promise.all([
       api.get('/public/overview', { params: { platform: platformKey } }),
@@ -54,9 +60,15 @@ export default function LandingPage() {
         setTracks(tr.data.tracks);
         setArtists(ar.data.artists);
         setRecentlyPlayed(rp.data.recently_played);
+        if (silent) setError(null); // a later successful poll clears an earlier failed one
       })
-      .catch(() => mounted && setError('Could not reach the API. Is the Laravel backend running?'))
-      .finally(() => mounted && setLoading(false));
+      .catch(() => {
+        // A silent background poll failing (e.g. a momentary network
+        // blip) shouldn't blank out data that's already on screen — only
+        // surface the error banner for the initial load.
+        if (mounted && !silent) setError('Could not reach the API. Is the Laravel backend running?');
+      })
+      .finally(() => mounted && !silent && setLoading(false));
 
     return () => {
       mounted = false;
@@ -65,7 +77,20 @@ export default function LandingPage() {
 
   useEffect(() => {
     const cleanup = load(platform);
-    return cleanup;
+
+    // Public Stats is a shared, always-changing view (unlike a personal
+    // dashboard the viewer just synced themselves), so it needs to refresh
+    // on its own rather than only ever reflecting whatever was true the
+    // moment the page loaded. The backend caches each response for 60s
+    // (see PublicDashboardController), so polling every 20s means a
+    // change is picked up well within that cache window without hammering
+    // the API on every request.
+    const intervalId = setInterval(() => load(platform, { silent: true }), 20_000);
+
+    return () => {
+      cleanup?.();
+      clearInterval(intervalId);
+    };
   }, [platform, load]);
 
   const totals = overview?.total_streams;

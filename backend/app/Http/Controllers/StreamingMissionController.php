@@ -40,6 +40,7 @@ class StreamingMissionController extends Controller
                         'track_name' => $mission->track_name,
                         'artwork_url' => $mission->artwork_url,
                         'theme_key' => $mission->theme_key,
+                        'source' => $mission->source,
                         'is_per_song' => $mission->isPerSong(),
                         'target_streams' => $mission->target_streams,
                         'current_streams' => $current,

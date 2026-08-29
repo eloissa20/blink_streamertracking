@@ -21,6 +21,7 @@ class StreamingMission extends Model
         'artwork_url',
         'target_streams',
         'theme_key',
+        'source',
         'is_active',
         'starts_at',
         'ends_at',
@@ -64,10 +65,24 @@ class StreamingMission extends Model
      * track_name (case-insensitive; track_id can differ across sources/
      * regions for the same song), an artist-wide mission matches on
      * artist_name alone.
+     *
+     * If `source` is set (see the migration that added it), a mission
+     * only counts plays from that one platform — a "Heaven — Spotify"
+     * mission and a "Heaven — Apple Music" mission are two separate rows
+     * with two separate source values, so a stream on one platform never
+     * adds to the other's progress bar, even though both still pool
+     * every user's plays on that platform (this isn't per-user — see
+     * StreamingMissionController::index()). Left null on any older
+     * mission row that predates this column, which keeps counting both
+     * platforms combined exactly as before.
      */
     public function matchingPlaysQuery()
     {
         $query = PlayRecord::query()->matchingConnectedSource();
+
+        if ($this->source) {
+            $query->where('source', $this->source);
+        }
 
         if ($this->isPerSong()) {
             $query->whereRaw('UPPER(track_name) = ?', [mb_strtoupper($this->track_name)]);
