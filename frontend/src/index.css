@@ -103,8 +103,12 @@ body {
 
 /* Day-mode take on the Spotify tab: same green accent, but the near-black
    backdrop and dark glass cards flip to a bright, airy surface instead of
-   just going dim, otherwise "light mode" would look identical to dark. */
-html.light[data-theme='spotify'] {
+   just going dim, otherwise "light mode" would look identical to dark.
+   NOTE: `data-theme` is set on a wrapping <div> inside LandingPage.jsx,
+   not on <html> itself — `.light` lives on <html> — so this has to be a
+   descendant selector (space), not a compound one, or it can never match
+   the same element and this whole block is silently dead. */
+html.light [data-theme='spotify'] {
   --theme-bg: #F4FBF6;
   --theme-glow-1: rgba(30, 215, 96, 0.14);
   --theme-glow-2: rgba(29, 185, 84, 0.08);
@@ -130,8 +134,9 @@ html.light[data-theme='spotify'] {
 }
 
 /* Day-mode take on the Apple Music tab: same red accent, bright surface
-   instead of the near-black default. */
-html.light[data-theme='apple_music'] {
+   instead of the near-black default. Same descendant-selector note as
+   the Spotify block above applies here. */
+html.light [data-theme='apple_music'] {
   --theme-bg: #FBF4F6;
   --theme-glow-1: rgba(250, 45, 72, 0.10);
   --theme-glow-2: rgba(255, 105, 135, 0.10);

@@ -71,9 +71,15 @@ class PersonalStatsController extends Controller
             ->matchingConnectedSource()
             ->forStatsFmConnection($connectionId)
             ->inWindow($window)
-            ->selectRaw('track_id, track_name, artist_name, album_name, artwork_url, source,
+            // See PublicDashboardController::topTracks() for why
+            // album_name/artwork_url must be aggregated with MAX() rather
+            // than grouped on directly — grouping on them fragments a
+            // single track into an "has artwork" row and a "no artwork"
+            // row whenever a play was scraped before its thumbnail loaded,
+            // and the artwork-less fragment usually wins on play_count.
+            ->selectRaw('track_id, track_name, artist_name, MAX(album_name) as album_name, MAX(artwork_url) as artwork_url, source,
                 COUNT(*) as play_count, SUM(duration_ms) as total_ms')
-            ->groupBy('track_id', 'track_name', 'artist_name', 'album_name', 'artwork_url', 'source')
+            ->groupBy('track_id', 'track_name', 'artist_name', 'source')
             ->orderByDesc('play_count')
             ->limit(50)
             ->get()

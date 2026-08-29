@@ -91,9 +91,22 @@ class PublicDashboardController extends Controller
         $platform = $this->platform($request);
 
         $tracks = Cache::remember("public_dashboard_top_tracks:{$platform}", 60, function () use ($platform) {
+            // NOTE: album_name/artwork_url must NOT be in the GROUP BY.
+            // Musicat-sourced plays only capture a thumbnail on some scrapes
+            // (lazy-loaded <img> not yet swapped in at read time — see
+            // MusicatService::normalizeStream()), so the same track_id ends
+            // up with a mix of rows that have a real artwork_url and rows
+            // where it's null. Grouping by artwork_url itself splits those
+            // into separate "tracks" (one with art, one without) instead of
+            // one — and since the null-artwork rows are usually the
+            // majority, that fragment routinely won the stream_count race,
+            // which is why tracks with genuinely scraped cover art still
+            // rendered the letter-avatar fallback. MAX() collapses back to
+            // one row per track and picks up any artwork_url that was ever
+            // captured for it.
             $tracks = (clone $this->baseQuery($platform))
-                ->selectRaw('track_id, track_name, artist_name, album_name, artwork_url, source, COUNT(*) as stream_count')
-                ->groupBy('track_id', 'track_name', 'artist_name', 'album_name', 'artwork_url', 'source')
+                ->selectRaw('track_id, track_name, artist_name, MAX(album_name) as album_name, MAX(artwork_url) as artwork_url, source, COUNT(*) as stream_count')
+                ->groupBy('track_id', 'track_name', 'artist_name', 'source')
                 ->orderByDesc('stream_count')
                 ->limit(25)
                 ->get();
