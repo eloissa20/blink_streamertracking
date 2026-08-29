@@ -33,6 +33,8 @@ return [
     // provider.
     'max_resends' => (int) env('REGISTRATION_MAX_RESENDS', 5),
 
+    'skip_email_delivery' => env('SKIP_EMAIL_DELIVERY', false),
+
     // Minimum gap between two sends (initial send counts as one) for the
     // same pending registration, regardless of the resend-count cap above.
     'resend_cooldown_seconds' => (int) env('REGISTRATION_RESEND_COOLDOWN_SECONDS', 60),
