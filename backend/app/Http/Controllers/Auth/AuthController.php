@@ -236,7 +236,15 @@ class AuthController extends Controller
         // otp_expires_at — so a transient mail-provider failure doesn't
         // burn one of the user's limited resend attempts or invalidate
         // a still-valid earlier code for no reason.
-        Mail::to($email)->send(new VerificationCodeMail($code, $ttl));
+        if (config('registration.skip_email_delivery')) {
+            // TEMPORARY: Resend isn't verified for a real domain yet, so
+            // don't actually attempt delivery (it would just throw). Log
+            // the code instead so it can be read from Render's log
+            // viewer and pasted into the verification screen manually.
+            \Illuminate\Support\Facades\Log::info("[SKIP_EMAIL_DELIVERY] Verification code for {$email}: {$code}");
+        } else {
+            Mail::to($email)->send(new VerificationCodeMail($code, $ttl));
+        }
 
         $fields = array_merge($attributes, [
             'otp_hash' => Hash::make($code),

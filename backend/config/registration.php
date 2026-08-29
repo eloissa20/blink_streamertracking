@@ -33,9 +33,15 @@ return [
     // provider.
     'max_resends' => (int) env('REGISTRATION_MAX_RESENDS', 5),
 
-    'skip_email_delivery' => env('SKIP_EMAIL_DELIVERY', false),
-
     // Minimum gap between two sends (initial send counts as one) for the
     // same pending registration, regardless of the resend-count cap above.
     'resend_cooldown_seconds' => (int) env('REGISTRATION_RESEND_COOLDOWN_SECONDS', 60),
+
+    // TEMPORARY testing flag. When true, no verification email is sent
+    // through Resend (or any mailer) — the code is written to the Laravel
+    // log instead, and the account is verified as normal once that code
+    // is submitted. Set SKIP_EMAIL_DELIVERY=true in the environment while
+    // Resend isn't set up for a real domain yet; remove/set to false once
+    // a verified sending domain is in place.
+    'skip_email_delivery' => (bool) env('SKIP_EMAIL_DELIVERY', false),
 ];
