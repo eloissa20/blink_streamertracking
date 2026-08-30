@@ -4,8 +4,8 @@ namespace App\Services;
 
 use App\Support\AllowedArtists;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
@@ -48,14 +48,84 @@ use Symfony\Component\DomCrawler\Crawler;
 class MusicatService
 {
     private string $profileBaseUrl;
-    private ?string $chromePath;
     private int $renderDelayMs;
+    private ?string $browserlessToken;
+    private string $browserlessEndpoint;
 
     public function __construct()
     {
         $this->profileBaseUrl = rtrim(config('musicat.profile_base_url'), '/');
-        $this->chromePath = config('musicat.chrome_path');
         $this->renderDelayMs = config('musicat.render_delay_ms');
+
+        // Rendering moved from a local headless Chrome (spatie/browsershot,
+        // which needs Node.js + a Chromium binary on the server) to
+        // Browserless's hosted /function API, specifically because this
+        // app also needs to run on shared hosting with no Node.js runtime
+        // and no ability to install a system-level Chromium. Browserless
+        // runs the same kind of Puppeteer-driven scroll/scrape logic in
+        // their cloud instead, reached over a plain HTTPS call — see
+        // callBrowserlessFunction() below.
+        $this->browserlessToken = config('musicat.browserless_token');
+        $this->browserlessEndpoint = rtrim(config('musicat.browserless_endpoint'), '/');
+    }
+
+    /**
+     * Run a Puppeteer-flavored script on Browserless's hosted /function
+     * API and return whatever it returned as `data` in its JSON response,
+     * or null on any failure (missing token, HTTP error, timeout, or the
+     * remote function itself throwing).
+     *
+     * $code is a full ES module string of the shape:
+     *   export default async ({ page, context }) => { ...; return { data, type }; };
+     * $context is passed through verbatim as the script's `context` arg —
+     * this is how the target URL and render delay reach the remote
+     * script, rather than string-interpolating them directly into $code.
+     *
+     * A generous HTTP timeout is used here because the remote script
+     * itself can legitimately run for up to ~150s (a long scroll history
+     * walking many rounds) — see the two callers below.
+     */
+    private function callBrowserlessFunction(string $code, array $context): ?string
+    {
+        if (! $this->browserlessToken) {
+            Log::warning('Browserless token not configured — Musicat sync skipped. Set BROWSERLESS_TOKEN.');
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(170)
+                ->connectTimeout(15)
+                ->post("{$this->browserlessEndpoint}/function?token={$this->browserlessToken}", [
+                    'code' => $code,
+                    'context' => $context,
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('Browserless function call failed', [
+                    'status' => $response->status(),
+                    // Truncated — Browserless error bodies can be long
+                    // and this is only for diagnosing failures, not for
+                    // parsing programmatically.
+                    'body' => mb_substr($response->body(), 0, 2000),
+                ]);
+                return null;
+            }
+
+            $result = $response->json();
+
+            // The remote function is expected to return { data, type } —
+            // see the two callers below, both of which return
+            // { data: html, type: 'text/plain' }. Missing 'data' means
+            // the remote script errored internally without HTTP-erroring
+            // (rare, but Browserless's own error shape varies by
+            // failure mode) — treat it the same as any other failure.
+            return $result['data'] ?? null;
+        } catch (\Throwable $e) {
+            Log::warning('Browserless function call threw', [
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     /**
@@ -130,25 +200,24 @@ class MusicatService
      */
     private function renderProfileHtml(string $handle): ?string
     {
-        try {
-            $shot = Browsershot::url("{$this->profileBaseUrl}/{$handle}")
-                ->noSandbox()
-                ->waitUntilDOMContentLoaded()
-                ->windowSize(1280, 2000)
-                ->setDelay($this->renderDelayMs)
-                // The incremental scroll-and-snapshot loop below can now
-                // run up to 150 rounds (~75s worst case) to walk a long
-                // history one viewport-step at a time — bumped up from 90s
-                // so a large backlog doesn't get cut off mid-scroll by the
-                // page-render timeout itself.
-                ->timeout(150);
+        // The scroll-and-snapshot logic below (unchanged from the local-
+        // Browsershot version) now runs as a page.evaluate() call inside
+        // a script executed remotely by Browserless — see
+        // callBrowserlessFunction()'s docblock for why. context.url and
+        // context.renderDelayMs come from the $context array passed
+        // below rather than being interpolated into this string.
+        $code = <<<'JS'
+            export default async ({ page, context }) => {
+                await page.setViewport({ width: 1280, height: 2000 });
+                await page.goto(context.url, {
+                    waitUntil: 'domcontentloaded',
+                    timeout: 60000,
+                });
+                await new Promise((resolve) => setTimeout(resolve, context.renderDelayMs));
 
-            if ($this->chromePath) {
-                $shot->setChromePath($this->chromePath);
-            }
-
-            return $shot->evaluate(<<<'JS'
-                (async () => {
+                // Up to 150 rounds (~75s worst case) to walk a long
+                // history one viewport-step at a time.
+                const html = await page.evaluate(async () => {
                     // Any element that actually scrolls internally (own
                     // scrollHeight taller than its own visible height) is
                     // a candidate — the "Recently played" panel is one of
@@ -279,15 +348,22 @@ class MusicatService
                     }
 
                     return document.body.innerHTML;
-                })()
-            JS);
-        } catch (\Throwable $e) {
-            Log::warning('Musicat profile render failed', [
-                'handle' => $handle,
-                'error' => $e->getMessage(),
-            ]);
-            return null;
+                });
+
+                return { data: html, type: 'text/plain' };
+            };
+        JS;
+
+        $html = $this->callBrowserlessFunction($code, [
+            'url' => "{$this->profileBaseUrl}/{$handle}",
+            'renderDelayMs' => $this->renderDelayMs,
+        ]);
+
+        if ($html === null) {
+            Log::warning('Musicat profile render failed', ['handle' => $handle]);
         }
+
+        return $html;
     }
 
     /**
@@ -360,20 +436,16 @@ class MusicatService
      */
     private function renderHistoryHtml(string $historyUserId): ?string
     {
-        try {
-            $shot = Browsershot::url("{$this->profileBaseUrl}/users/{$historyUserId}/history")
-                ->noSandbox()
-                ->waitUntilDOMContentLoaded()
-                ->windowSize(1280, 2000)
-                ->setDelay($this->renderDelayMs)
-                ->timeout(150);
+        $code = <<<'JS'
+            export default async ({ page, context }) => {
+                await page.setViewport({ width: 1280, height: 2000 });
+                await page.goto(context.url, {
+                    waitUntil: 'domcontentloaded',
+                    timeout: 60000,
+                });
+                await new Promise((resolve) => setTimeout(resolve, context.renderDelayMs));
 
-            if ($this->chromePath) {
-                $shot->setChromePath($this->chromePath);
-            }
-
-            return $shot->evaluate(<<<'JS'
-                (async () => {
+                const html = await page.evaluate(async () => {
                     const ROW_META_RE = /(Apple Music|Spotify)[^\d]{1,8}\d{2}\.\d{2}\.\d{2}\s+\d{1,2}:\d{2}\s*[AP]M/i;
 
                     const findScrollables = () => Array.from(document.querySelectorAll('*'))
@@ -536,15 +608,22 @@ class MusicatService
                     document.body.appendChild(combined);
 
                     return document.body.innerHTML;
-                })()
-            JS);
-        } catch (\Throwable $e) {
-            Log::warning('Musicat history render failed', [
-                'historyUserId' => $historyUserId,
-                'error' => $e->getMessage(),
-            ]);
-            return null;
+                });
+
+                return { data: html, type: 'text/plain' };
+            };
+        JS;
+
+        $html = $this->callBrowserlessFunction($code, [
+            'url' => "{$this->profileBaseUrl}/users/{$historyUserId}/history",
+            'renderDelayMs' => $this->renderDelayMs,
+        ]);
+
+        if ($html === null) {
+            Log::warning('Musicat history render failed', ['historyUserId' => $historyUserId]);
         }
+
+        return $html;
     }
 
     /**
